@@ -24,7 +24,7 @@
 ## 🚀 快速开始
 
 ### 在线演示
-访问：https://8.147.56.12/pet-garden/
+访问：https://pets.renzhe.org/
 
 ### 本地开发
 
