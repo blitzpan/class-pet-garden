@@ -24,7 +24,7 @@ export function useToast() {
     setTimeout(() => {
       render(null, container)
       document.body.removeChild(container)
-    }, (options.duration || 3000) + 500)
+    }, (options.duration || 3000) + 800)
   }
   
   return {
