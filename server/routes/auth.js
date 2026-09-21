@@ -4,7 +4,6 @@ import { db } from '../db.js'
 import { hashPassword, verifyPassword } from '../utils/password.js'
 import { generateToken, verifyToken } from '../utils/token.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { sendTeacherRegisterNotice } from '../services/showDocPushService.js'
 import { isValidPhone } from '../utils/phone.js'
 import { markWelcomeVipEligible } from '../utils/welcomeVip.js'
 import { registerRateLimit, loginRateLimit } from '../middleware/rateLimit.js'
@@ -40,8 +39,6 @@ router.post('/register', registerRateLimit, async (req, res) => {
     .run(userId, username, passwordHash, 0, createdAt)
 
   await markWelcomeVipEligible(db, userId)
-
-  void sendTeacherRegisterNotice(username, new Date(createdAt))
 
   const token = generateToken(userId)
   res.json({

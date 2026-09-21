@@ -14,13 +14,9 @@ export async function getAccessibleRule(db, ruleId, userId) {
 }
 
 export async function ensureRuleUserIdColumn(db) {
-  const columns = await db.prepare(`
-    SELECT COLUMN_NAME AS name
-    FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'evaluation_rules'
-  `).all()
-
-  if (!columns.some(column => column.name === 'user_id')) {
-    await db.exec('ALTER TABLE evaluation_rules ADD COLUMN user_id VARCHAR(36) NULL')
+  const columns = await db.prepare(`PRAGMA table_info(evaluation_rules)`).all()
+  const hasColumn = columns.some((column) => column.name === 'user_id')
+  if (!hasColumn) {
+    await db.exec('ALTER TABLE evaluation_rules ADD COLUMN user_id VARCHAR(36)')
   }
 }

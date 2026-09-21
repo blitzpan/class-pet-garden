@@ -1,57 +1,60 @@
-import { AsyncLocalStorage } from 'async_hooks'
-import mysql from 'mysql2/promise'
+import Database from 'better-sqlite3'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-const storage = new AsyncLocalStorage()
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+let sqliteDb = null
+let openedPath = null
 
 export function getDbConfig() {
   return {
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'classpets',
-    charset: 'utf8mb4',
-    waitForConnections: true,
-    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 10),
+    driver: 'sqlite',
+    path: process.env.SQLITE_PATH || path.resolve(__dirname, 'pet-garden.db'),
   }
 }
 
-const poolState = { pool: null }
-
-export function getPool() {
-  if (!poolState.pool) {
-    poolState.pool = mysql.createPool(getDbConfig())
+function getDb() {
+  const dbPath = process.env.SQLITE_PATH || path.resolve(__dirname, 'pet-garden.db')
+  if (!sqliteDb || openedPath !== dbPath) {
+    sqliteDb = new Database(dbPath)
+    sqliteDb.pragma('journal_mode = WAL')
+    sqliteDb.pragma('foreign_keys = ON')
+    openedPath = dbPath
   }
-  return poolState.pool
+  return sqliteDb
 }
 
+// 重置连接（测试时切换到独立的测试库文件）
+export function resetDbConnection() {
+  if (sqliteDb) {
+    sqliteDb.close()
+    sqliteDb = null
+    openedPath = null
+  }
+}
+
+// MySQL 的 INSERT IGNORE 在 SQLite 中对应 INSERT OR IGNORE
 function normalizeSql(sql) {
-  return sql.replace(/INSERT OR IGNORE/gi, 'INSERT IGNORE')
-}
-
-function getExecutor() {
-  return storage.getStore() || getPool()
+  return sql.replace(/INSERT IGNORE/gi, 'INSERT OR IGNORE')
 }
 
 function createDbInterface() {
+  const dbh = getDb()
   return {
     prepare(sql) {
-      const normalizedSql = normalizeSql(sql)
+      const normalized = normalizeSql(sql)
+      const stmt = dbh.prepare(normalized)
       return {
         async get(...params) {
-          const [rows] = await getExecutor().execute(normalizedSql, params)
-          return rows[0]
+          return stmt.get(...params)
         },
         async all(...params) {
-          const [rows] = await getExecutor().execute(normalizedSql, params)
-          return rows
+          return stmt.all(...params)
         },
         async run(...params) {
-          const [result] = await getExecutor().execute(normalizedSql, params)
-          return {
-            changes: result.affectedRows,
-            lastInsertRowid: result.insertId,
-          }
+          const info = stmt.run(...params)
+          return { changes: info.changes, lastInsertRowid: info.lastInsertRowid }
         },
       }
     },
@@ -59,39 +62,34 @@ function createDbInterface() {
     async exec(sql) {
       const statements = sql
         .split(';')
-        .map(statement => statement.trim())
-        .filter(statement => statement && !statement.startsWith('--'))
+        .map((statement) => statement.trim())
+        .filter((statement) => statement && !statement.startsWith('--'))
 
       for (const statement of statements) {
-        await getExecutor().query(statement)
+        dbh.exec(statement)
       }
     },
 
     transaction(fn) {
       return async (...args) => {
-        if (storage.getStore()) {
-          return fn(...args)
-        }
-
-        const conn = await getPool().getConnection()
+        const alreadyIn = dbh.inTransaction
+        if (!alreadyIn) dbh.prepare('BEGIN').run()
         try {
-          await conn.beginTransaction()
-          const result = await storage.run(conn, async () => fn(...args))
-          await conn.commit()
+          const result = await fn(...args)
+          if (!alreadyIn) dbh.prepare('COMMIT').run()
           return result
         } catch (error) {
-          await conn.rollback()
+          if (!alreadyIn) dbh.prepare('ROLLBACK').run()
           throw error
-        } finally {
-          conn.release()
         }
       }
     },
 
     async close() {
-      if (poolState.pool) {
-        await poolState.pool.end()
-        poolState.pool = null
+      if (sqliteDb) {
+        sqliteDb.close()
+        sqliteDb = null
+        openedPath = null
       }
     },
   }
@@ -99,8 +97,12 @@ function createDbInterface() {
 
 export const db = createDbInterface()
 
+export function getPool() {
+  return getDb()
+}
+
 export async function initDb() {
-  const pool = getPool()
+  const dbh = getDb()
   const statements = [
     `CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(36) PRIMARY KEY,
@@ -108,16 +110,15 @@ export async function initDb() {
       password_hash VARCHAR(255) NOT NULL,
       is_guest TINYINT NOT NULL DEFAULT 0,
       created_at BIGINT
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
 
     `CREATE TABLE IF NOT EXISTS classes (
       id VARCHAR(36) PRIMARY KEY,
       user_id VARCHAR(36),
       name VARCHAR(255) NOT NULL,
       created_at BIGINT,
-      updated_at BIGINT,
-      INDEX idx_classes_user_id (user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      updated_at BIGINT
+    )`,
 
     `CREATE TABLE IF NOT EXISTS students (
       id VARCHAR(36) PRIMARY KEY,
@@ -129,18 +130,16 @@ export async function initDb() {
       pet_level INT NOT NULL DEFAULT 1,
       pet_exp INT NOT NULL DEFAULT 0,
       created_at BIGINT,
-      INDEX idx_students_class_id (class_id),
       CONSTRAINT fk_students_class FOREIGN KEY (class_id) REFERENCES classes(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
 
     `CREATE TABLE IF NOT EXISTS badges (
       id VARCHAR(36) PRIMARY KEY,
       student_id VARCHAR(36) NOT NULL,
       pet_type VARCHAR(64) NOT NULL,
       earned_at BIGINT,
-      INDEX idx_badges_student_id (student_id),
       CONSTRAINT fk_badges_student FOREIGN KEY (student_id) REFERENCES students(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
 
     `CREATE TABLE IF NOT EXISTS evaluation_rules (
       id VARCHAR(36) PRIMARY KEY,
@@ -149,9 +148,8 @@ export async function initDb() {
       category VARCHAR(64) NOT NULL,
       is_custom TINYINT NOT NULL DEFAULT 0,
       user_id VARCHAR(36),
-      created_at BIGINT,
-      INDEX idx_rules_user_id (user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      created_at BIGINT
+    )`,
 
     `CREATE TABLE IF NOT EXISTS evaluation_records (
       id VARCHAR(36) PRIMARY KEY,
@@ -161,17 +159,14 @@ export async function initDb() {
       reason VARCHAR(512) NOT NULL,
       category VARCHAR(64) NOT NULL,
       timestamp BIGINT,
-      INDEX idx_records_class_id (class_id),
-      INDEX idx_records_student_id (student_id),
-      INDEX idx_records_timestamp (timestamp),
       CONSTRAINT fk_records_class FOREIGN KEY (class_id) REFERENCES classes(id),
       CONSTRAINT fk_records_student FOREIGN KEY (student_id) REFERENCES students(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
 
     `CREATE TABLE IF NOT EXISTS settings (
       \`key\` VARCHAR(128) PRIMARY KEY,
       value TEXT NOT NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
 
     `CREATE TABLE IF NOT EXISTS class_tasks (
       id VARCHAR(36) PRIMARY KEY,
@@ -185,10 +180,9 @@ export async function initDb() {
       status VARCHAR(32) NOT NULL DEFAULT 'active',
       created_at BIGINT,
       updated_at BIGINT,
-      INDEX idx_tasks_class_id (class_id),
       CONSTRAINT fk_tasks_class FOREIGN KEY (class_id) REFERENCES classes(id),
       CONSTRAINT fk_tasks_rule FOREIGN KEY (rule_id) REFERENCES evaluation_rules(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
 
     `CREATE TABLE IF NOT EXISTS task_completions (
       id VARCHAR(36) PRIMARY KEY,
@@ -197,33 +191,41 @@ export async function initDb() {
       evaluation_record_id VARCHAR(36),
       completed_at BIGINT,
       completed_by VARCHAR(36),
-      UNIQUE KEY uk_task_student (task_id, student_id),
-      INDEX idx_completions_task_id (task_id),
-      INDEX idx_completions_student_id (student_id),
+      UNIQUE (task_id, student_id),
       CONSTRAINT fk_completions_task FOREIGN KEY (task_id) REFERENCES class_tasks(id),
       CONSTRAINT fk_completions_student FOREIGN KEY (student_id) REFERENCES students(id),
       CONSTRAINT fk_completions_record FOREIGN KEY (evaluation_record_id) REFERENCES evaluation_records(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
 
     `CREATE TABLE IF NOT EXISTS class_vip_subscriptions (
       id VARCHAR(36) PRIMARY KEY,
-      class_id VARCHAR(36) NOT NULL UNIQUE,
+      class_id VARCHAR(36) NOT NULL,
       plan VARCHAR(32) NOT NULL,
       status VARCHAR(32) NOT NULL DEFAULT 'active',
-      started_at BIGINT NOT NULL,
-      expires_at BIGINT NOT NULL,
-      created_at BIGINT NOT NULL,
-      updated_at BIGINT NOT NULL,
+      started_at BIGINT,
+      expires_at BIGINT,
+      created_at BIGINT,
+      updated_at BIGINT,
       CONSTRAINT fk_vip_class FOREIGN KEY (class_id) REFERENCES classes(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    )`,
+
+    `CREATE INDEX IF NOT EXISTS idx_classes_user_id ON classes(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_rules_user_id ON evaluation_rules(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_records_class_id ON evaluation_records(class_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_records_student_id ON evaluation_records(student_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_records_timestamp ON evaluation_records(timestamp)`,
+    `CREATE INDEX IF NOT EXISTS idx_tasks_class_id ON class_tasks(class_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_completions_task_id ON task_completions(task_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_completions_student_id ON task_completions(student_id)`,
   ]
 
   for (const statement of statements) {
-    await pool.query(statement)
+    await db.exec(statement)
   }
 
-  await pool.query(`
-    INSERT IGNORE INTO evaluation_rules (id, name, points, category, is_custom, created_at) VALUES
+  await db.exec(`
+    INSERT OR IGNORE INTO evaluation_rules (id, name, points, category, is_custom, created_at) VALUES
       ('rule_1', '课堂积极发言', 2, '学习', 0, 1704067200000),
       ('rule_2', '作业完成优秀', 3, '学习', 0, 1704067200000),
       ('rule_3', '帮助同学', 2, '行为', 0, 1704067200000),
@@ -233,7 +235,22 @@ export async function initDb() {
       ('rule_7', '课堂捣乱', -3, '行为', 0, 1704067200000),
       ('rule_8', '主动打扫卫生', 2, '健康', 0, 1704067200000),
       ('rule_9', '坚持运动', 2, '健康', 0, 1704067200000),
-      ('rule_10', '不讲卫生', -1, '健康', 0, 1704067200000)
+      ('rule_10', '不讲卫生', -1, '健康', 0, 1704067200000),
+      ('rule_11', '认真完成作业', 2, '家庭', 0, 1704067200000),
+      ('rule_12', '书写工整坐姿端正', 1, '家庭', 0, 1704067200000),
+      ('rule_13', '主动打扫整理房间', 2, '家庭', 0, 1704067200000),
+      ('rule_14', '分担家务帮助父母', 2, '家庭', 0, 1704067200000),
+      ('rule_15', '照顾弟妹友爱同伴', 2, '家庭', 0, 1704067200000),
+      ('rule_16', '坚持运动锻炼身体', 1, '家庭', 0, 1704067200000),
+      ('rule_17', '勇敢大方礼貌待人', 1, '家庭', 0, 1704067200000),
+      ('rule_18', '早睡早起自己的事自己做', 1, '家庭', 0, 1704067200000),
+      ('rule_19', '不挑食光盘行动', 1, '家庭', 0, 1704067200000),
+      ('rule_20', '不写作业敷衍了事', -2, '家庭', 0, 1704067200000),
+      ('rule_21', '不听话顶撞长辈', -2, '家庭', 0, 1704067200000),
+      ('rule_22', '挑食不好好吃饭', -1, '家庭', 0, 1704067200000),
+      ('rule_23', '沉迷手机电视超时', -1, '家庭', 0, 1704067200000),
+      ('rule_24', '乱放东西不收拾', -1, '家庭', 0, 1704067200000),
+      ('rule_25', '撒谎', -3, '家庭', 0, 1704067200000)
   `)
 }
 

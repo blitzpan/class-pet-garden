@@ -245,15 +245,21 @@ async function bootstrap() {
   }
 
   // 演示班级独立归属游客账户；已有真实老师的数据不会被读取或改写。
-  const guest = await db.prepare('SELECT id FROM users WHERE username = ?').get('guest')
-  const demoSeedResult = await ensureDemoData(db, guest.id)
-  if (demoSeedResult.seeded) {
-    console.log(`🌻 已创建演示数据：${demoSeedResult.className}（${demoSeedResult.students} 名学生）`)
-  }
+  // 生产环境设置 DISABLE_DEMO=1 可跳过演示数据播种与每日重置定时任务。
+  const disableDemo = process.env.DISABLE_DEMO === '1' || process.env.DISABLE_DEMO === 'true'
+  if (!disableDemo) {
+    const guest = await db.prepare('SELECT id FROM users WHERE username = ?').get('guest')
+    const demoSeedResult = await ensureDemoData(db, guest.id)
+    if (demoSeedResult.seeded) {
+      console.log(`🌻 已创建演示数据：${demoSeedResult.className}（${demoSeedResult.students} 名学生）`)
+    }
 
-  const demoVipResult = await ensureDemoVip(db)
-  if (demoVipResult.ensured) {
-    console.log('✨ 已为演示班级开通永久 VIP')
+    const demoVipResult = await ensureDemoVip(db)
+    if (demoVipResult.ensured) {
+      console.log('✨ 已为演示班级开通永久 VIP')
+    }
+  } else {
+    console.log('🚫 已禁用演示数据（DISABLE_DEMO=1）')
   }
 
   // 初始化默认评价规则
@@ -313,7 +319,8 @@ async function getGuestUserId() {
 bootstrap()
   .then((httpServer) => {
     server = httpServer
-    stopDemoResetScheduler = startDemoResetScheduler(db, getGuestUserId)
+    const disableDemo = process.env.DISABLE_DEMO === '1' || process.env.DISABLE_DEMO === 'true'
+    stopDemoResetScheduler = disableDemo ? null : startDemoResetScheduler(db, getGuestUserId)
   })
   .catch((err) => {
     console.error('Failed to start server:', err)

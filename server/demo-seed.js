@@ -10,7 +10,8 @@ const DEMO_RULES = [
   { id: 'demo-rule-milestone', name: '成长里程碑达成', points: 100, category: '其他' },
   { id: 'demo-rule-role-model', name: '月度榜样奖励', points: 50, category: '行为' },
   { id: 'demo-rule-learning', name: '学习目标达成', points: 20, category: '学习' },
-  { id: 'demo-rule-health', name: '运动打卡坚持', points: 10, category: '健康' }
+  { id: 'demo-rule-health', name: '运动打卡坚持', points: 10, category: '健康' },
+  { id: 'demo-rule-family', name: '家庭劳动小能手', points: 8, category: '家庭' }
 ]
 const DAILY_HABIT_RULE = { name: '遵守纪律', points: 1, category: '行为' }
 
@@ -91,7 +92,7 @@ async function seedDemoData(db, guestUserId) {
     ).run(DEMO_CLASS_ID, guestUserId, '向日葵班 · 成长花园', now, now)
 
     const insertRule = db.prepare(
-      'INSERT IGNORE INTO evaluation_rules (id, name, points, category, is_custom, created_at) VALUES (?, ?, ?, ?, 0, ?)'
+      'INSERT OR IGNORE INTO evaluation_rules (id, name, points, category, is_custom, created_at) VALUES (?, ?, ?, ?, 0, ?)'
     )
     for (const rule of DEMO_RULES) {
       await insertRule.run(rule.id, rule.name, rule.points, rule.category, now)

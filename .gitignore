@@ -6,6 +6,8 @@ dist/
 
 # Database
 *.db
+*.db-wal
+*.db-shm
 
 # IDE
 .idea/

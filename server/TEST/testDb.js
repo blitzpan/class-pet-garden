@@ -1,7 +1,10 @@
-import mysql from 'mysql2/promise'
-import { getDbConfig, initDb, db } from '../db.js'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { initDb, db, resetDbConnection } from '../db.js'
 
-const TEST_DB_NAME = 'classpets_test'
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const TEST_DB_PATH = process.env.SQLITE_TEST_PATH || path.resolve(__dirname, '..', 'pet-garden.test.db')
 
 const TABLES = [
   'task_completions',
@@ -17,23 +20,20 @@ const TABLES = [
 ]
 
 export async function ensureTestDatabase() {
-  const config = getDbConfig()
-  const admin = await mysql.createConnection({
-    host: config.host,
-    port: config.port,
-    user: config.user,
-    password: config.password,
-  })
-  await admin.query(`CREATE DATABASE IF NOT EXISTS \`${TEST_DB_NAME}\` DEFAULT CHARSET utf8mb4`)
-  await admin.end()
+  // SQLite 使用独立的测试库文件
+  if (fs.existsSync(TEST_DB_PATH)) {
+    fs.unlinkSync(TEST_DB_PATH)
+  }
+  process.env.SQLITE_PATH = TEST_DB_PATH
+  resetDbConnection()
 }
 
 export async function resetTestDb() {
-  await db.exec('SET FOREIGN_KEY_CHECKS = 0')
+  await db.exec('PRAGMA foreign_keys = OFF')
   for (const table of TABLES) {
     await db.prepare(`DELETE FROM ${table}`).run()
   }
-  await db.exec('SET FOREIGN_KEY_CHECKS = 1')
+  await db.exec('PRAGMA foreign_keys = ON')
 }
 
 let initialized = false

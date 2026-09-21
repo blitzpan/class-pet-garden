@@ -514,7 +514,7 @@ function toggleShowAllStudents() {
   showAllStudents.value = !showAllStudents.value
 }
 
-const categories = ['学习', '行为', '健康', '其他']
+const categories = ['学习', '行为', '健康', '家庭', '其他']
 
 const currentCategoryRules = computed(() => {
   return rules.value.filter(r => r.category === selectedEvalTab.value)

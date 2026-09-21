@@ -19,8 +19,11 @@ const pendingClass = ref<ClassVipItem | null>(null)
 const showSubscribeConfirm = ref(false)
 const showPaymentModal = ref(false)
 
-const ADMIN_WECHAT_PHONE = '13604023002'
-const WECHAT_PAY_QR_URL = '/wechat-pay-qrcode.png'
+// 收款联系方式由部署者通过环境变量自行配置，默认留空（不在代码中硬编码私人微信）
+const ADMIN_WECHAT_PHONE = (import.meta.env.VITE_ADMIN_WECHAT_PHONE || '').trim()
+const WECHAT_PAY_QR_URL = (import.meta.env.VITE_WECHAT_PAY_QR_URL || '').trim()
+const hasWechatContact = computed(() => ADMIN_WECHAT_PHONE.length > 0)
+const hasPayQr = computed(() => WECHAT_PAY_QR_URL.length > 0)
 
 const plans = computed(() => overview.value?.plans || [])
 const benefits = computed(() => overview.value?.benefits || [])
@@ -413,17 +416,19 @@ onMounted(loadOverview)
             <div class="mt-5 overflow-hidden rounded-2xl border border-[#e8f5e9] bg-[#f6fff8] p-4">
               <p class="text-center text-sm font-semibold text-[#166534]">微信收款码</p>
               <img
+                v-if="hasPayQr"
                 :src="WECHAT_PAY_QR_URL"
                 alt="微信收款码"
                 class="mx-auto mt-3 w-full max-w-[280px] rounded-2xl border border-white bg-white shadow-[0_8px_24px_rgba(22,101,52,0.08)]"
               />
-              <p class="mt-3 text-center text-xs leading-5 text-[#6b8f7d]">推荐使用微信扫一扫完成支付</p>
+              <p v-else class="mt-3 text-center text-xs leading-5 text-[#6b8f7d]">收款码未配置，请联系系统管理员获取支付方式</p>
+              <p v-if="hasPayQr" class="mt-3 text-center text-xs leading-5 text-[#6b8f7d]">推荐使用微信扫一扫完成支付</p>
             </div>
 
             <div class="mt-5 space-y-3 text-sm leading-7 text-[#806b5b]">
               <div class="rounded-2xl border border-[#ffedd5] bg-[#fff7ed] px-4 py-3 text-[#9a5a2b]">
                 <p class="font-semibold text-[#c2410c]">支付完成后，请联系管理员开通</p>
-                <p class="mt-1">
+                <p class="mt-1" v-if="hasWechatContact">
                   请添加微信
                   <button
                     type="button"
@@ -435,6 +440,7 @@ onMounted(loadOverview)
                   </button>
                   ，并注明<strong class="font-semibold text-[#422d20]">班级名称</strong>与<strong class="font-semibold text-[#422d20]">所选方案</strong>。我们将在核实到账后，为您手动开通灵犀计划。
                 </p>
+                <p class="mt-1" v-else>请联系本系统管理员，注明<strong class="font-semibold text-[#422d20]">班级名称</strong>与<strong class="font-semibold text-[#422d20]">所选方案</strong>，核实到账后由管理员为您手动开通灵犀计划。</p>
               </div>
             </div>
           </div>

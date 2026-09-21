@@ -11,7 +11,7 @@ function getWelcomeVipEligibleKey(userId) {
 export async function markWelcomeVipEligible(db, userId) {
   await db.prepare(`
     INSERT INTO settings (\`key\`, value) VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE value = VALUES(value)
+    ON CONFLICT(\`key\`) DO UPDATE SET value = excluded.value
   `).run(getWelcomeVipEligibleKey(userId), '1')
 }
 

@@ -3,6 +3,12 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
+# 前端构建时注入的环境变量（灵犀计划 VIP 收款联系方式等，需 docker build --build-arg 传入）
+ARG VITE_ADMIN_WECHAT_PHONE
+ARG VITE_WECHAT_PAY_QR_URL
+ENV VITE_ADMIN_WECHAT_PHONE=$VITE_ADMIN_WECHAT_PHONE
+ENV VITE_WECHAT_PAY_QR_URL=$VITE_WECHAT_PAY_QR_URL
+
 COPY package.json package-lock.json ./
 RUN npm install --no-audit --no-fund
 
@@ -25,6 +31,10 @@ COPY --from=frontend-builder /app/dist ./dist
 
 ENV NODE_ENV=production
 ENV PORT=3002
+# 数据库为 SQLite 单文件，挂载持久卷到 /data，避免容器重建丢失数据
+ENV SQLITE_PATH=/data/pet-garden.db
+
+VOLUME ["/data"]
 
 EXPOSE 3002
 

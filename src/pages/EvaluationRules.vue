@@ -7,12 +7,13 @@ import { useToast } from '@/composables/useToast'
 import type { Rule } from '@/types'
 import { BADGE_CLASS } from '@/utils/badge'
 
-const categories = ['学习', '行为', '健康', '其他'] as const
+const categories = ['学习', '行为', '健康', '家庭', '其他'] as const
 
 const categoryMeta: Record<string, { icon: string; color: string; bg: string }> = {
   学习: { icon: 'menu_book', color: 'text-[#2563eb]', bg: 'bg-[#eff6ff]' },
   行为: { icon: 'volunteer_activism', color: 'text-[#d97706]', bg: 'bg-[#fff7ed]' },
   健康: { icon: 'favorite', color: 'text-[#059669]', bg: 'bg-[#ecfdf5]' },
+  家庭: { icon: 'home', color: 'text-[#db2777]', bg: 'bg-[#fdf2f8]' },
   其他: { icon: 'stars', color: 'text-[#7c3aed]', bg: 'bg-[#f5f3ff]' }
 }
 
@@ -186,7 +187,7 @@ onMounted(loadRules)
           </div>
         </div>
         <div class="relative hidden min-h-56 items-center justify-center overflow-hidden bg-[#fff4ea] px-8 lg:flex">
-          <div class="absolute right-8 top-7 rounded-full bg-white/80 px-3 py-1.5 text-sm font-bold text-[#ae6a3e]">四类标准</div>
+          <div class="absolute right-8 top-7 rounded-full bg-white/80 px-3 py-1.5 text-sm font-bold text-[#ae6a3e]">五类标准</div>
           <div class="absolute bottom-0 h-20 w-[120%] rounded-t-[100%] bg-[#f8e6d4]"></div>
           <div class="relative z-10 grid grid-cols-2 gap-3">
             <div

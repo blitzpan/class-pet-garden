@@ -13,7 +13,7 @@ import {
   groupRecordsByCategory
 } from '@/utils/recordGroups'
 
-const categories = ['学习', '行为', '健康', '其他'] as const
+const categories = ['学习', '行为', '健康', '家庭', '其他'] as const
 
 function isTaskRecord(record: EvaluationRecord) {
   return Boolean(record.task_id) || record.reason.startsWith('【任务】')

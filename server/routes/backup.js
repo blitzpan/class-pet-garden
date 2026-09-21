@@ -67,7 +67,7 @@ router.post('/', authMiddleware, async (req, res) => {
     if (rules) {
       await db.prepare('DELETE FROM evaluation_rules WHERE is_custom = 1 AND user_id = ?').run(req.userId)
       const insertRule = db.prepare(`
-        INSERT IGNORE INTO evaluation_rules (id, name, points, category, is_custom, user_id, created_at)
+        INSERT OR IGNORE INTO evaluation_rules (id, name, points, category, is_custom, user_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `)
       for (const r of rules.filter(r => r.is_custom)) {
