@@ -21,6 +21,7 @@ export interface StudentDetail {
   pet_type: string | null
   pet_level: number
   pet_exp: number
+  class_id: string
   class_name: string
 }
 

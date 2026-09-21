@@ -23,7 +23,9 @@ export async function getStudentShare(studentId: string) {
   return data
 }
 
-export async function getRules() {
-  const { data } = await client.get<{ rules: Rule[] }>('/public/rules')
+export async function getRules(classId?: string) {
+  const { data } = await client.get<{ rules: Rule[] }>('/public/rules', {
+    params: classId ? { classId } : undefined,
+  })
   return data.rules
 }

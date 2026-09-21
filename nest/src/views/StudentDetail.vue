@@ -18,6 +18,7 @@ const hasPet = ref(false)
 const records = ref<EvalRecord[]>([])
 const levelConfig = ref<number[]>([40, 60, 80, 100, 120, 140, 160])
 const rules = ref<Rule[]>([])
+const classId = ref<string>('')
 const loading = ref(true)
 const error = ref('')
 
@@ -58,10 +59,11 @@ async function load() {
   try {
     const d = await getStudentShare(studentId)
     student.value = d.student
+    classId.value = d.student.class_id || ''
     hasPet.value = d.hasPet
     records.value = d.records
     if (Array.isArray(d.levelConfig) && d.levelConfig.length) levelConfig.value = d.levelConfig
-    if (auth.isLoggedIn) rules.value = await getRules()
+    if (auth.isLoggedIn) rules.value = await getRules(classId.value)
   } catch (e: any) {
     error.value = e?.response?.data?.error || '加载失败'
   } finally {
@@ -98,7 +100,7 @@ onMounted(load)
         家长登录
       </button>
       <button
-        v-else-if="sameStudent"
+        v-else
         @click="auth.logout()"
         class="bg-white/20 rounded-full px-3 py-1.5 text-sm"
       >

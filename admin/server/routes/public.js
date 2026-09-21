@@ -22,16 +22,29 @@ router.get('/leaderboard', async (req, res) => {
   res.json({ students })
 })
 
-// 全局评价规则（家长端加减分按钮数据）
+// 班级评价规则（家长端加减分按钮数据）：全局规则 + 本班教师自定义规则
 router.get('/rules', async (req, res) => {
-  const rules = await db.prepare('SELECT id, name, points, category FROM evaluation_rules WHERE user_id IS NULL ORDER BY category, points DESC').all()
+  const { classId } = req.query
+  let rules
+  if (classId) {
+    rules = await db.prepare(`
+      SELECT id, name, points, category FROM evaluation_rules
+      WHERE user_id IS NULL OR user_id = (SELECT user_id FROM classes WHERE id = ?)
+      ORDER BY category, points DESC
+    `).all(classId)
+  } else {
+    rules = await db.prepare(`
+      SELECT id, name, points, category FROM evaluation_rules
+      WHERE user_id IS NULL ORDER BY category, points DESC
+    `).all()
+  }
   res.json({ rules })
 })
 
 // 学生分享 / 宠物详情（公开）
 router.get('/students/:studentId/share', async (req, res) => {
   const student = await db.prepare(`
-    SELECT s.id, s.name, s.student_no, s.total_points, s.pet_type, s.pet_level, s.pet_exp, c.name AS class_name
+    SELECT s.id, s.name, s.student_no, s.total_points, s.pet_type, s.pet_level, s.pet_exp, c.id AS class_id, c.name AS class_name
     FROM students s JOIN classes c ON s.class_id = c.id WHERE s.id = ?
   `).get(req.params.studentId)
 
