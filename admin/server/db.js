@@ -129,6 +129,7 @@ export async function initDb() {
       pet_type VARCHAR(64),
       pet_level INT NOT NULL DEFAULT 1,
       pet_exp INT NOT NULL DEFAULT 0,
+      parent_password_hash VARCHAR(255),
       created_at BIGINT,
       CONSTRAINT fk_students_class FOREIGN KEY (class_id) REFERENCES classes(id)
     )`,
@@ -222,6 +223,13 @@ export async function initDb() {
 
   for (const statement of statements) {
     await db.exec(statement)
+  }
+
+  // 迁移：家长密码字段（已存在则忽略）
+  try {
+    await db.exec('ALTER TABLE students ADD COLUMN parent_password_hash VARCHAR(255)')
+  } catch (e) {
+    // 字段已存在，忽略
   }
 
   await db.exec(`

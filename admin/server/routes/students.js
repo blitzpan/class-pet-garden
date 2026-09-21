@@ -194,4 +194,20 @@ router.delete('/:id/pet', authMiddleware, async (req, res) => {
   res.json({ success: true })
 })
 
+// 重置家长密码（管理员，供家长忘记密码时重置）
+router.post('/:id/reset-parent-password', authMiddleware, async (req, res) => {
+  const student = await db.prepare(`
+    SELECT s.* FROM students s
+    JOIN classes c ON s.class_id = c.id
+    WHERE s.id = ? AND c.user_id = ?
+  `).get(req.params.id, req.userId)
+
+  if (!student) {
+    return res.status(404).json({ error: '学生不存在或无权访问' })
+  }
+
+  await db.prepare('UPDATE students SET parent_password_hash = NULL WHERE id = ?').run(req.params.id)
+  res.json({ success: true })
+})
+
 export default router

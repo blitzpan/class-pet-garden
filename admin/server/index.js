@@ -24,6 +24,7 @@ import settingsRoutes from './routes/settings.js'
 import vipRoutes from './routes/vip.js'
 import adminRoutes from './routes/admin.js'
 import publicRoutes from './routes/public.js'
+import parentRoutes from './routes/parent.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 3002)
@@ -58,6 +59,7 @@ function registerApiRoutes(basePath) {
   app.use(`${basePath}/settings`, settingsRoutes)
   app.use(`${basePath}/vip`, vipRoutes)
   app.use(`${basePath}/admin`, adminRoutes)
+  app.use(`${basePath}/parent`, parentRoutes)
   app.get(`${basePath}/health`, (req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() })
   })
