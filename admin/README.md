@@ -57,6 +57,63 @@ npm run server
 bash start-server.sh
 ```
 
+### 完整本地联调（教师端 + 后端 + 家长端）
+
+本仓库包含三个独立进程，需同时启动才能完整联调（家长端 `nest` 为独立前端，数据全部来自 `admin/server` 后端）：
+
+| 进程 | 目录 | 命令 | 端口 | 说明 |
+|------|------|------|------|------|
+| 后端 API | `admin/server` | `node index.js` | 3002 | 数据/接口（better-sqlite3） |
+| 教师端前端 | `admin` | `npm run dev` | 3001 | Vite，代理 `/pet-garden/api` → 3002 |
+| 家长端前端 | `nest` | `npm run dev` | 5173 | Vite，代理 `/api`、`/pet-garden/api` → 3002 |
+
+> 三个目录各有独立 `node_modules`，首次运行需分别安装依赖：
+> ```bash
+> cd admin && npm install
+> cd admin/server && npm install
+> cd nest && npm install
+> ```
+> 后端也可用 `npm run server`（带 `--watch` 自动重启）；`admin` 根目录执行 `npm start` 会用 concurrently 同时拉起教师端前端与后端。
+
+**启动**（建议各开一个终端）：
+
+```bash
+# 1) 后端
+cd admin/server && node index.js
+
+# 2) 教师端前端
+cd admin && npm run dev
+
+# 3) 家长端前端
+cd nest && npm run dev
+```
+
+**关闭**：
+
+- 方式 A：各终端直接 `Ctrl+C`。
+- 方式 B：按端口强杀（无需找终端窗口）：
+  ```powershell
+  foreach ($p in @(3001,3002,5173)) {
+    Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue | ForEach-Object {
+      if ($_.OwningProcess -ne 0) { Stop-Process -Id $_.OwningProcess -Force }
+    }
+  }
+  ```
+  （PowerShell；bash 下可用 `lsof -ti:3001,3002,5173 | xargs -r kill`）
+
+**验证是否就绪**：
+
+```powershell
+(Invoke-WebRequest http://localhost:3002/api/health -UseBasicParsing).StatusCode   # 期望 200
+(Invoke-WebRequest http://localhost:3001/ -UseBasicParsing).StatusCode              # 期望 200
+(Invoke-WebRequest http://localhost:5173/ -UseBasicParsing).StatusCode              # 期望 200
+```
+
+**访问地址**：
+
+- 教师端：`http://localhost:3001`（演示登录账号 `13934294873` / `test123`）
+- 家长端：`http://localhost:5173`（进入 `/student/{学生ID}` 走家长登录/首次设密码）
+
 ---
 
 ## 📸 功能截图

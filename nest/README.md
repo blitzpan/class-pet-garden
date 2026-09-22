@@ -19,6 +19,9 @@ npm run dev          # 默认 http://localhost:5173
 开发服务器已在 `vite.config.ts` 中配置了代理：`/api` 与 `/pet-garden/api` 转发到
 `http://localhost:3002`（即本地运行的 `admin/server`）。
 
+> **联调前置**：本地运行家长端前，请先启动 `admin/server` 后端（默认 `http://localhost:3002`）。
+> 完整的三进程启动/关闭步骤见 `admin/README.md` 的「完整本地联调（教师端 + 后端 + 家长端）」一节。
+
 ## 3. 生产构建
 
 ```bash
