@@ -27,6 +27,12 @@ import publicRoutes from './routes/public.js'
 import parentRoutes from './routes/parent.js'
 
 const app = express()
+// 本地直接 `node index.js` 时加载 ../.env（若存在），使配置项生效；不覆盖已存在的环境变量
+try {
+  process.loadEnvFile(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.env'))
+} catch {
+  // .env 不存在则忽略
+}
 const PORT = Number(process.env.PORT || 3002)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.resolve(__dirname, '../dist')

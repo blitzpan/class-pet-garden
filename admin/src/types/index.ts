@@ -5,6 +5,7 @@ export interface Class {
   created_at: number
   updated_at?: number
   user_id?: string
+  invite_code?: string
 }
 
 // 学生

@@ -29,90 +29,20 @@
 ### 本地开发
 
 ```bash
-# 克隆项目
-git clone https://github.com/gaotong132/class-pet-garden.git
-cd class-pet-garden
-
-# 安装依赖
 npm install
-
-# 启动开发服务器（同时启动前端和后端）
-npm start
-
-# 或分别启动
-npm run dev      # 前端
-npm run server   # 后端
+npm start        # 同时启动教师端前端(3001) 与后端(3002)
 ```
 
-### 生产部署
+### 部署与联调文档
 
-```bash
-# 构建前端
-npm run build
+本仓库由「教师端（本目录）+ 后端（`server/`）+ 家长端（`../nest`）」三个独立部分组成，
+**所有打包 / 部署 / 联调步骤统一记录在仓库根目录的 `docs/` 下，不要再看本文件以外的旧说明**：
 
-# 启动后端服务
-npm run server
-
-# 或使用启动脚本
-bash start-server.sh
-```
-
-### 完整本地联调（教师端 + 后端 + 家长端）
-
-本仓库包含三个独立进程，需同时启动才能完整联调（家长端 `nest` 为独立前端，数据全部来自 `admin/server` 后端）：
-
-| 进程 | 目录 | 命令 | 端口 | 说明 |
-|------|------|------|------|------|
-| 后端 API | `admin/server` | `node index.js` | 3002 | 数据/接口（better-sqlite3） |
-| 教师端前端 | `admin` | `npm run dev` | 3001 | Vite，代理 `/pet-garden/api` → 3002 |
-| 家长端前端 | `nest` | `npm run dev` | 5173 | Vite，代理 `/api`、`/pet-garden/api` → 3002 |
-
-> 三个目录各有独立 `node_modules`，首次运行需分别安装依赖：
-> ```bash
-> cd admin && npm install
-> cd admin/server && npm install
-> cd nest && npm install
-> ```
-> 后端也可用 `npm run server`（带 `--watch` 自动重启）；`admin` 根目录执行 `npm start` 会用 concurrently 同时拉起教师端前端与后端。
-
-**启动**（建议各开一个终端）：
-
-```bash
-# 1) 后端
-cd admin/server && node index.js
-
-# 2) 教师端前端
-cd admin && npm run dev
-
-# 3) 家长端前端
-cd nest && npm run dev
-```
-
-**关闭**：
-
-- 方式 A：各终端直接 `Ctrl+C`。
-- 方式 B：按端口强杀（无需找终端窗口）：
-  ```powershell
-  foreach ($p in @(3001,3002,5173)) {
-    Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue | ForEach-Object {
-      if ($_.OwningProcess -ne 0) { Stop-Process -Id $_.OwningProcess -Force }
-    }
-  }
-  ```
-  （PowerShell；bash 下可用 `lsof -ti:3001,3002,5173 | xargs -r kill`）
-
-**验证是否就绪**：
-
-```powershell
-(Invoke-WebRequest http://localhost:3002/api/health -UseBasicParsing).StatusCode   # 期望 200
-(Invoke-WebRequest http://localhost:3001/ -UseBasicParsing).StatusCode              # 期望 200
-(Invoke-WebRequest http://localhost:5173/ -UseBasicParsing).StatusCode              # 期望 200
-```
-
-**访问地址**：
-
-- 教师端：`http://localhost:3001`（演示登录账号 `13934294873` / `test123`）
-- 家长端：`http://localhost:5173`（进入 `/student/{学生ID}` 走家长登录/首次设密码）
+| 文档 | 内容 |
+|------|------|
+| [`../docs/LOCAL-DEV.md`](../docs/LOCAL-DEV.md) | 本地三端联调（启动/停止/排错） |
+| [`../docs/LOCAL-BUILD.md`](../docs/LOCAL-BUILD.md) | 本地打包、改配置、上传到服务器 |
+| [`../docs/DEPLOY-PRODUCTION.md`](../docs/DEPLOY-PRODUCTION.md) | 生产部署（1Panel + OpenResty + systemd，不用 Docker） |
 
 ---
 
@@ -240,27 +170,15 @@ cd nest && npm run dev
 
 ### 系统架构
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      班级宠物园                          │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│   ┌─────────────────┐         ┌─────────────────┐      │
-│   │   Vue 3 前端     │   API   │  Node.js 后端   │      │
-│   │                 │ ←─────→ │                 │      │
-│   │  • Composition  │   REST  │  • Express.js   │      │
-│   │  • TypeScript   │   JSON  │  • better-sqlite│      │
-│   │  • Tailwind CSS │         │  • CORS         │      │
-│   │  • Vue Router   │         │                 │      │
-│   └─────────────────┘         └────────┬────────┘      │
-│                                        │                │
-│                                        ▼                │
-│                                ┌─────────────────┐      │
-│                                │     SQLite      │      │
-│                                │  pet-garden.db  │      │
-│                                └─────────────────┘      │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph SYS["班级宠物园"]
+        FE["Vue 3 前端<br/>Composition · TypeScript<br/>Tailwind CSS · Vue Router"]
+        BE["Node.js 后端<br/>Express.js · better-sqlite3 · CORS"]
+        DB[("SQLite<br/>pet-garden.db")]
+    end
+    FE <-->|"REST API（JSON）"| BE
+    BE --> DB
 ```
 
 ### 技术栈

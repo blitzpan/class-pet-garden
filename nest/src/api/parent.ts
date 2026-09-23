@@ -26,6 +26,18 @@ export async function login(payload: { studentId: string; password: string }) {
   return data
 }
 
+export async function join(payload: {
+  classId: string
+  name: string
+  inviteCode: string
+  password: string
+  captchaToken: string
+  captchaAnswer: string | number
+}) {
+  const { data } = await client.post<{ token: string; studentId: string }>('/parent/join', payload)
+  return data
+}
+
 export async function logout() {
   await client.post('/parent/logout')
 }

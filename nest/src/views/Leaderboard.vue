@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
 import RankListRow from '@/components/ranking/RankListRow.vue'
 import RankPodium from '@/components/ranking/RankPodium.vue'
+import JoinTeamModal from '@/components/JoinTeamModal.vue'
 import { getClasses, getLeaderboard } from '@/api/public'
+import { useAuthStore } from '@/stores/auth'
 import type { RankingStudent } from '@/utils/ranking'
 import type { ClassItem } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
+const auth = useAuthStore()
 
 const classes = ref<ClassItem[]>([])
 const currentClass = ref<ClassItem | null>(null)
@@ -54,9 +58,18 @@ function openStudent(student: RankingStudent) {
   router.push({ name: 'student', params: { studentId: student.id } })
 }
 
-// 加入团队功能待定
+// 加入团队：打开弹窗，基于当前选中的班级加入
+const showJoinModal = ref(false)
+
 function joinTeam() {
-  // TODO: 加入当前团队
+  if (!currentClass.value) return
+  showJoinModal.value = true
+}
+
+function onJoined(payload: { token: string; studentId: string }) {
+  auth.apply(payload.token, payload.studentId)
+  showJoinModal.value = false
+  router.push({ name: 'student', params: { studentId: payload.studentId } })
 }
 
 onMounted(async () => {
@@ -67,9 +80,12 @@ onMounted(async () => {
       loading.value = false
       return
     }
+    // 邀请链接带 classId 时，优先预选对应班级（仍需家长手动点“加入”并输入邀请码）
+    const urlClassId = typeof route.query.classId === 'string' ? route.query.classId : ''
+    const urlClass = urlClassId ? classes.value.find(c => c.id === urlClassId) : null
     const savedId = localStorage.getItem(CLASS_STORAGE_KEY)
     const saved = savedId ? classes.value.find(c => c.id === savedId) : null
-    await selectClass(saved || classes.value[0])
+    await selectClass(urlClass || saved || classes.value[0])
   } catch {
     loading.value = false
   }
@@ -156,5 +172,13 @@ onMounted(async () => {
         </section>
       </main>
     </div>
+
+    <JoinTeamModal
+      v-if="showJoinModal && currentClass"
+      :class-id="currentClass.id"
+      :class-name="currentClass.name"
+      @success="onJoined"
+      @close="showJoinModal = false"
+    />
   </AppShell>
 </template>

@@ -8,9 +8,28 @@ import { normalizeVipRow } from './vip.js'
 const router = Router()
 const DEMO_CLASS_ID = 'demo-class-2026'
 
+// 生成唯一的 6 位纯数字邀请码
+async function generateUniqueInviteCode(database) {
+  let code
+  do {
+    code = String(Math.floor(100000 + Math.floor(Math.random() * 900000)))
+  } while (await database.prepare('SELECT 1 FROM classes WHERE invite_code = ?').get(code))
+  return code
+}
+
+// 拼接家长端邀请链接：{PARENT_APP_BASE_URL}/?classId={班级ID}
+// 域名完全由 PARENT_APP_BASE_URL 配置决定，未配置则返回空字符串。
+function buildInviteLink(classId) {
+  const base = process.env.PARENT_APP_BASE_URL || ''
+  if (!base) return ''
+  const clean = base.replace(/\/+$/, '')
+  return `${clean}/?classId=${encodeURIComponent(classId)}`
+}
+
 // 获取班级列表（只返回当前用户的班级）
 router.get('/', authMiddleware, async (req, res) => {
-  const classes = await db.prepare('SELECT * FROM classes WHERE user_id = ? ORDER BY created_at DESC').all(req.userId)
+  const rows = await db.prepare('SELECT * FROM classes WHERE user_id = ? ORDER BY created_at DESC').all(req.userId)
+  const classes = rows.map(c => ({ ...c, inviteLink: buildInviteLink(c.id) }))
   res.json({ classes })
 })
 
@@ -59,9 +78,10 @@ router.post('/', authMiddleware, async (req, res) => {
   const { name } = req.body
   const id = uuidv4()
   const now = Date.now()
+  const inviteCode = await generateUniqueInviteCode(db)
 
-  await db.prepare('INSERT INTO classes (id, user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-    .run(id, req.userId, name, now, now)
+  await db.prepare('INSERT INTO classes (id, user_id, name, invite_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, req.userId, name, inviteCode, now, now)
 
   const welcomeVip = await grantWelcomeVipIfEligible(db, req.userId, id)
   const vip = welcomeVip
@@ -72,11 +92,25 @@ router.post('/', authMiddleware, async (req, res) => {
     id,
     user_id: req.userId,
     name,
+    invite_code: inviteCode,
+    inviteLink: buildInviteLink(id),
     created_at: now,
     updated_at: now,
     welcomeVipGranted: Boolean(welcomeVip),
     vip,
   })
+})
+
+// 重新生成班级邀请码（仅创建者本人）
+router.put('/:id/invite-code', authMiddleware, async (req, res) => {
+  const classInfo = await db.prepare('SELECT user_id FROM classes WHERE id = ?').get(req.params.id)
+  if (!classInfo) return res.status(404).json({ error: '班级不存在' })
+  if (classInfo.user_id !== req.userId) return res.status(403).json({ error: '无权操作' })
+
+  const inviteCode = await generateUniqueInviteCode(db)
+  const now = Date.now()
+  await db.prepare('UPDATE classes SET invite_code = ?, updated_at = ? WHERE id = ?').run(inviteCode, now, req.params.id)
+  res.json({ inviteCode, inviteLink: buildInviteLink(req.params.id) })
 })
 
 // 更新班级

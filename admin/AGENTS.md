@@ -21,13 +21,12 @@ npm run dev          # 启动前端开发服务器（端口 3001）
 npm run server       # 启动后端 API 服务器（端口 3002）
 npm run start        # 同时启动前后端
 
-# 生产
-npm run build        # 类型检查 + 构建前端（vue-tsc && vite build）
-npm run preview      # 预览生产构建
-
 # 仅后端（在 server/ 目录下）
 cd server && npm start
 ```
+
+> 打包 / 部署 / 生产环境配置不属于本文件的维护范围，统一见仓库根目录 `docs/`：
+> `docs/LOCAL-DEV.md`（本地联调）、`docs/LOCAL-BUILD.md`（打包与配置）、`docs/DEPLOY-PRODUCTION.md`（生产部署）。
 
 **未配置测试框架。**如需添加测试，推荐使用 Vitest（与 Vite 生态一致）。
 
@@ -223,6 +222,6 @@ app.get('/api/classes', (req, res) => {
 
 1. **注释使用中文** - 保持风格一致
 2. **当前无测试** - 使用 `npm run dev` + `npm run server` 手动验证
-3. **同时运行两个服务器** 以获得完整功能：`npm run start`
+3. **同时运行两个服务器** 以获得完整功能：`npm run start`；三端（教师端 + 后端 + 家长端）联调见 `../docs/LOCAL-DEV.md`
 4. **代理配置** 在 Vite 中：`/pet-garden/api` → `http://localhost:3002`
 5. **构建前类型检查**：`vue-tsc` 随 `npm run build` 自动运行

@@ -75,6 +75,51 @@ router.post('/login', loginRateLimit, async (req, res) => {
   res.json({ token: issueParentToken(studentId), studentId })
 })
 
+// 家长加入班级（基于已选中的班级，校验邀请码；建/认领学生并设密码）
+router.post('/join', loginRateLimit, async (req, res) => {
+  const { classId, name, inviteCode, password, captchaToken, captchaAnswer } = req.body
+  if (!classId || !name || !inviteCode || !password) {
+    return res.status(400).json({ error: '缺少参数' })
+  }
+  if (!verifyCaptcha(captchaToken, captchaAnswer)) {
+    return res.status(400).json({ error: '验证码错误，请重新计算' })
+  }
+  if (String(password).length < 4) {
+    return res.status(400).json({ error: '密码至少 4 位' })
+  }
+  const trimmedName = String(name).trim()
+  if (!trimmedName) return res.status(400).json({ error: '请输入孩子姓名' })
+  const code = String(inviteCode).trim()
+
+  const cls = await db.prepare('SELECT id, invite_code FROM classes WHERE id = ?').get(classId)
+  if (!cls) return res.status(404).json({ error: '班级不存在' })
+  if (!cls.invite_code || String(cls.invite_code).trim() !== code) {
+    return res.status(403).json({ error: '邀请码不正确' })
+  }
+
+  // 同班级同名已存在的学生
+  const existing = await db.prepare(
+    'SELECT id, parent_password_hash FROM students WHERE class_id = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))'
+  ).get(classId, trimmedName)
+
+  if (existing) {
+    if (existing.parent_password_hash) {
+      return res.status(409).json({ error: '该学生已加入，请直接登录', code: 'ALREADY_JOINED' })
+    }
+    // 认领老师已预建的学生
+    await db.prepare('UPDATE students SET parent_password_hash = ? WHERE id = ?').run(hashPassword(password), existing.id)
+    return res.json({ token: issueParentToken(existing.id), studentId: existing.id, claimed: true })
+  }
+
+  // 新建学生（与老师单个加入逻辑一致）
+  const id = uuidv4()
+  const now = Date.now()
+  await db.prepare(
+    'INSERT INTO students (id, class_id, name, total_points, pet_level, pet_exp, parent_password_hash, created_at) VALUES (?, ?, ?, 0, 1, 0, ?, ?)'
+  ).run(id, classId, trimmedName, hashPassword(password), now)
+  res.json({ token: issueParentToken(id), studentId: id, claimed: false })
+})
+
 router.post('/logout', (req, res) => res.json({ success: true }))
 
 router.get('/me', parentAuth, (req, res) => res.json({ studentId: req.studentId }))

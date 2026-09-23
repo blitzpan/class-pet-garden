@@ -232,6 +232,22 @@ export async function initDb() {
     // 字段已存在，忽略
   }
 
+  // 迁移：班级邀请码（6 位纯数字，唯一；已存在则忽略）
+  try {
+    await db.exec('ALTER TABLE classes ADD COLUMN invite_code VARCHAR(12)')
+  } catch (e) {
+    // 字段已存在，忽略
+  }
+  // 为历史班级回填唯一邀请码
+  const classesWithoutCode = await db.prepare('SELECT id FROM classes WHERE invite_code IS NULL OR invite_code = ?').all('')
+  for (const row of classesWithoutCode) {
+    let code
+    do {
+      code = String(Math.floor(100000 + Math.floor(Math.random() * 900000)))
+    } while (await db.prepare('SELECT 1 FROM classes WHERE invite_code = ?').get(code))
+    await db.prepare('UPDATE classes SET invite_code = ? WHERE id = ?').run(code, row.id)
+  }
+
   await db.exec(`
     INSERT OR IGNORE INTO evaluation_rules (id, name, points, category, is_custom, created_at) VALUES
       ('rule_1', '课堂积极发言', 2, '学习', 0, 1704067200000),
