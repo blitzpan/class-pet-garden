@@ -44,7 +44,7 @@ router.get('/rules', async (req, res) => {
 // 学生分享 / 宠物详情（公开）
 router.get('/students/:studentId/share', async (req, res) => {
   const student = await db.prepare(`
-    SELECT s.id, s.name, s.student_no, s.total_points, s.pet_type, s.pet_level, s.pet_exp, c.id AS class_id, c.name AS class_name
+    SELECT s.id, s.name, s.student_no, s.total_points, s.pet_type, s.pet_level, s.pet_exp, s.parent_password_hash, c.id AS class_id, c.name AS class_name
     FROM students s JOIN classes c ON s.class_id = c.id WHERE s.id = ?
   `).get(req.params.studentId)
 
@@ -53,6 +53,7 @@ router.get('/students/:studentId/share', async (req, res) => {
   }
 
   const hasPet = !!student.pet_type
+  const hasParentPassword = !!student.parent_password_hash
   const records = await db.prepare(`
     SELECT id, points, reason, category, timestamp FROM evaluation_records WHERE student_id = ? ORDER BY timestamp DESC LIMIT 50
   `).all(req.params.studentId)
@@ -63,7 +64,7 @@ router.get('/students/:studentId/share', async (req, res) => {
     try { levelConfig = JSON.parse(levelConfigRow.value) } catch { /* 用默认 */ }
   }
 
-  res.json({ student, hasPet, records, levelConfig })
+  res.json({ student, hasPet, hasParentPassword, records, levelConfig })
 })
 
 export default router

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { calculateLevel, getLevelProgress, getPetType, getPetLevelImage } from '@/data/pets'
 import { getStudentShare, getRules } from '@/api/public'
 import type { StudentDetail as SD, EvalRecord, Rule } from '@/types'
 import { useAuthStore } from '@/stores/auth'
@@ -15,57 +16,74 @@ const auth = useAuthStore()
 
 const student = ref<SD | null>(null)
 const hasPet = ref(false)
+const hasParentPassword = ref(false)
 const records = ref<EvalRecord[]>([])
-const levelConfig = ref<number[]>([40, 60, 80, 100, 120, 140, 160])
 const rules = ref<Rule[]>([])
 const classId = ref<string>('')
 const loading = ref(true)
-const error = ref('')
+const notFound = ref(false)
 
 const showAuth = ref(false)
 const showAdopt = ref(false)
+const adoptMode = ref<'adopt' | 'change'>('adopt')
 const showChangePwd = ref(false)
 
 const sameStudent = computed(() => auth.isLoggedIn && auth.studentId === studentId)
 const otherLogin = computed(() => auth.isLoggedIn && auth.studentId !== studentId)
 
-const progress = computed(() => {
-  if (!student.value) return { level: 1, current: 0, required: 0, pct: 0, isMax: false }
-  const exp = student.value.pet_exp
-  const cfg = levelConfig.value
-  let level = 1
-  let prev = 0
-  for (let i = 0; i < cfg.length; i++) {
-    if (exp >= prev + cfg[i]) {
-      level++
-      prev += cfg[i]
-    } else break
-  }
-  const required = cfg[level - 1] || 0
-  const current = exp - prev
-  const isMax = level >= 8
-  return {
-    level,
-    current,
-    required,
-    pct: isMax ? 100 : Math.min(100, (current / required) * 100),
-    isMax,
-  }
+const displayLevel = computed(() => (student.value ? calculateLevel(student.value.pet_exp) : 1))
+const levelProgress = computed(() => (student.value ? getLevelProgress(student.value.pet_exp) : getLevelProgress(0)))
+const petImage = computed(() => {
+  if (!student.value?.pet_type) return ''
+  return getPetLevelImage(student.value.pet_type, student.value.pet_level)
 })
+
+// 成长记录：取「有打卡记录的最后的 7 天」（按天倒序，不要求连续）
+const displayRecords = computed<EvalRecord[]>(() => {
+  const days = new Set<string>()
+  const result: EvalRecord[] = []
+  for (const r of records.value) {
+    const d = new Date(r.timestamp)
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+    if (!days.has(key)) {
+      if (days.size >= 7) break
+      days.add(key)
+    }
+    result.push(r)
+  }
+  return result
+})
+
+const toastMsg = ref('')
+let toastTimer: ReturnType<typeof setTimeout> | undefined
+function showToast(msg: string) {
+  toastMsg.value = msg
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toastMsg.value = ''), 2000)
+}
+
+const shareUrl = computed(() => window.location.href)
+async function copyShareLink() {
+  try {
+    await navigator.clipboard.writeText(shareUrl.value)
+    showToast('分享链接已复制')
+  } catch {
+    showToast('复制失败，请手动复制地址栏链接')
+  }
+}
 
 async function load() {
   loading.value = true
-  error.value = ''
   try {
     const d = await getStudentShare(studentId)
     student.value = d.student
     classId.value = d.student.class_id || ''
     hasPet.value = d.hasPet
+    hasParentPassword.value = d.hasParentPassword
     records.value = d.records
-    if (Array.isArray(d.levelConfig) && d.levelConfig.length) levelConfig.value = d.levelConfig
     if (auth.isLoggedIn) rules.value = await getRules(classId.value)
-  } catch (e: any) {
-    error.value = e?.response?.data?.error || '加载失败'
+  } catch {
+    notFound.value = true
   } finally {
     loading.value = false
   }
@@ -75,141 +93,180 @@ function onAuthSuccess() {
   showAuth.value = false
   load()
 }
-
 function onAdoptDone() {
   showAdopt.value = false
   load()
+}
+
+function formatRecordTime(timestamp?: number) {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  const now = new Date()
+  const isToday = date.toDateString() === now.toDateString()
+  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  return isToday ? `今天 ${time}` : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 onMounted(load)
 </script>
 
 <template>
-  <div class="min-h-full bg-gray-100">
-    <header class="bg-gradient-to-r from-amber-400 to-orange-400 text-white px-4 py-4 shadow flex items-center">
-      <router-link to="/" class="mr-3 text-2xl leading-none text-white/90">‹</router-link>
-      <div class="flex-1 min-w-0">
-        <h1 class="text-lg font-bold truncate">{{ student?.name || '学生' }} 的宠物</h1>
-        <p class="text-xs opacity-90">{{ student?.class_name }}</p>
-      </div>
-      <button
-        v-if="!auth.isLoggedIn"
-        @click="showAuth = true"
-        class="bg-white/20 rounded-full px-3 py-1.5 text-sm"
-      >
-        家长登录
-      </button>
-      <button
-        v-else
-        @click="auth.logout()"
-        class="bg-white/20 rounded-full px-3 py-1.5 text-sm"
-      >
-        登出
-      </button>
-    </header>
+  <div class="min-h-screen bg-[#fffaf5] font-sans text-[#38281f]">
+    <div class="mx-auto max-w-2xl px-4 pt-6 pb-24 sm:px-6 sm:pt-10 sm:pb-24">
+      <div v-if="loading" class="rounded-3xl bg-white px-6 py-16 text-center text-sm text-[#9a735d] shadow-sm">加载中…</div>
 
-    <p v-if="loading && !student" class="text-center text-gray-400 py-10">加载中…</p>
-
-    <main v-else-if="student" class="p-3 space-y-3">
-      <div
-        v-if="otherLogin"
-        class="bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm rounded-xl px-3 py-2"
-      >
-        当前登录的是另一名学生的家长账号，请先
-        <button @click="auth.logout()" class="underline ml-1">登出</button>
-        再操作本页。
+      <div v-else-if="notFound || !student" class="rounded-3xl bg-white px-6 py-16 text-center shadow-sm">
+        <span class="material-symbols-rounded text-[48px] text-[#e8c9ae]">pets</span>
+        <p class="mt-4 text-lg font-bold text-[#422d20]">成长记录不存在</p>
+        <p class="mt-2 text-sm text-[#9a735d]">链接可能已失效，请联系老师获取最新分享链接。</p>
+        <router-link to="/" class="mt-6 inline-flex text-sm font-semibold text-orange-600 hover:text-orange-700">返回排行榜</router-link>
       </div>
 
-      <!-- 学生信息 -->
-      <section class="bg-white rounded-2xl shadow-sm p-4">
-        <div class="flex items-center">
-          <div class="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center text-3xl mr-3">
-            👤
-          </div>
-          <div class="min-w-0">
-            <div class="font-bold text-lg">{{ student.name }}</div>
-            <div class="text-xs text-gray-400">
-              学号 {{ student.student_no || '—' }} · 总积分 {{ student.total_points }}
+      <template v-else>
+        <section class="overflow-hidden rounded-3xl bg-white shadow-[0_12px_40px_rgba(101,71,45,0.08)]">
+          <div class="bg-orange-600 px-6 pb-4 pt-5 text-white">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h1 class="font-serif text-3xl font-bold">{{ student.name }}</h1>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  class="inline-flex h-9 items-center gap-1 rounded-full bg-white/10 px-3 text-sm font-semibold text-white transition hover:bg-white/20"
+                  @click="copyShareLink"
+                >
+                  <span class="material-symbols-rounded text-[18px]">share</span>
+                  <span class="hidden sm:inline">复制链接</span>
+                </button>
+                <button
+                  v-if="!auth.isLoggedIn"
+                  type="button"
+                  class="inline-flex h-9 items-center gap-1 rounded-full bg-white/25 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-white/35"
+                  @click="showAuth = true"
+                >
+                  <span class="material-symbols-rounded text-[18px]">login</span>
+                  <span>家长登录</span>
+                </button>
+                <template v-else>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center gap-1 rounded-full bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25"
+                    @click="showChangePwd = true"
+                  >
+                    <span class="material-symbols-rounded text-[18px]">lock</span>
+                    <span class="hidden sm:inline">修改密码</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center gap-1 rounded-full bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25"
+                    @click="auth.logout()"
+                  >
+                    <span class="material-symbols-rounded text-[18px]">logout</span>
+                    <span>登出</span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <div class="mt-4 flex gap-4">
+              <div class="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/20 sm:h-28 sm:w-28">
+                <img v-if="student.pet_type" :src="petImage" :alt="getPetType(student.pet_type)?.name" class="h-full w-full rounded-2xl object-contain" />
+                <span v-else class="text-4xl">?</span>
+              </div>
+              <div class="min-w-0 flex-1 pt-1">
+                <div class="mb-1 flex items-center justify-between text-xs text-orange-100">
+                  <span>成长进度</span>
+                  <span>Lv.{{ displayLevel }} · {{ levelProgress.current }}/{{ levelProgress.required }}</span>
+                </div>
+                <div class="h-2.5 overflow-hidden rounded-full bg-white/30">
+                  <div class="h-full rounded-full bg-white" :style="{ width: `${levelProgress.percentage}%` }" />
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-sm text-orange-100">
+                  <template v-if="student.pet_type">
+                    <span>{{ getPetType(student.pet_type)?.name }}</span>
+                    <button
+                      v-if="sameStudent"
+                      type="button"
+                      class="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/30"
+                      @click="adoptMode = 'change'; showAdopt = true"
+                    >
+                      更换宠物
+                    </button>
+                  </template>
+                  <button
+                    v-else-if="sameStudent"
+                    type="button"
+                    class="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold text-white transition hover:bg-white/30"
+                    @click="adoptMode = 'adopt'; showAdopt = true"
+                  >
+                    领养宠物
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- 宠物 -->
-      <section class="bg-white rounded-2xl shadow-sm p-4">
-        <template v-if="hasPet">
-          <div class="flex items-center">
-            <div
-              class="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center text-4xl mr-3"
-            >
-              🐾
+          <div class="p-6">
+            <div v-if="otherLogin" class="mb-4 rounded-xl bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
+              当前登录的是另一名学生的家长账号，请先
+              <button type="button" class="underline ml-1" @click="auth.logout()">登出</button>
+              再操作本页。
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="font-semibold">宠物（Lv.{{ progress.level }}）</div>
-              <div class="text-xs text-gray-400">成长值 {{ student.pet_exp }}</div>
+
+            <!-- 家长操作区（快速评价，类比教师端） -->
+            <section v-if="sameStudent" class="mb-5 rounded-2xl border border-[#f1e5db] bg-[#fffdf9] p-4 shadow-[0_10px_30px_rgba(101,71,45,0.04)]">
+              <div class="flex items-center justify-between">
+                <h2 class="font-serif text-xl font-bold text-[#422d20]">快速评价</h2>
+                <span class="text-sm text-[#9a735d]">{{ rules.length }} 条规则</span>
+              </div>
+              <ScorePanel v-if="rules.length" :rules="rules" @scored="load" />
+              <p v-else class="text-sm text-[#9a735d]">该班级暂无可用的评价规则。</p>
+            </section>
+
+            <!-- 成长记录 -->
+            <div class="flex items-center justify-between">
+              <h2 class="font-serif text-xl font-bold text-[#422d20]">成长记录</h2>
+              <span class="text-sm text-[#9a735d]">近 7 个打卡日 · 共 {{ displayRecords.length }} 条</span>
             </div>
-          </div>
-          <div class="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div class="h-full bg-orange-400" :style="{ width: progress.pct + '%' }"></div>
-          </div>
-          <div class="text-[11px] text-gray-400 mt-1">
-            {{ progress.isMax ? '已满级' : `距离下一级还需 ${progress.required - progress.current} 成长值` }}
-          </div>
-        </template>
-        <template v-else>
-          <div class="text-center py-4">
-            <div class="text-4xl mb-2">🥚</div>
-            <p class="text-gray-500 text-sm">还没有领养宠物</p>
-            <button
-              v-if="sameStudent"
-              @click="showAdopt = true"
-              class="mt-3 bg-orange-500 text-white rounded-xl px-5 py-2 text-sm font-semibold"
-            >
-              领取宠物
-            </button>
-            <p v-else class="text-xs text-gray-400 mt-2">家长登录后可领取</p>
-          </div>
-        </template>
-      </section>
 
-      <!-- 家长操作区 -->
-      <section v-if="sameStudent" class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-        <ScorePanel v-if="rules.length" :rules="rules" @scored="load" />
-        <button @click="showChangePwd = true" class="text-sm text-gray-500 underline">
-          修改密码
-        </button>
-      </section>
+            <div v-if="displayRecords.length" class="mt-4 space-y-2">
+              <article
+                v-for="record in displayRecords"
+                :key="record.id"
+                class="flex items-center justify-between rounded-xl bg-[#fff8f2] px-4 py-3"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-[#4d3527]">{{ record.reason }}</p>
+                  <p class="mt-1 text-sm text-[#b0927c]">{{ record.category }} · {{ formatRecordTime(record.timestamp) }}</p>
+                </div>
+                <span
+                  class="ml-3 shrink-0 text-sm font-bold tabular-nums"
+                  :class="record.points > 0 ? 'text-emerald-600' : record.points < 0 ? 'text-rose-600' : 'text-slate-500'"
+                >
+                  {{ record.points > 0 ? '+' : '' }}{{ record.points }}
+                </span>
+              </article>
+            </div>
+            <p v-else class="mt-6 rounded-2xl bg-[#fff8f2] px-4 py-10 text-center text-sm text-[#9a735d]">还没有成长记录，继续加油！</p>
 
-      <!-- 记录 -->
-      <section class="bg-white rounded-2xl shadow-sm p-4">
-        <h4 class="font-semibold text-gray-700 mb-2">最近记录</h4>
-        <p v-if="records.length === 0" class="text-sm text-gray-400">暂无记录</p>
-        <ul class="space-y-1">
-          <li v-for="r in records" :key="r.id" class="flex items-center text-sm">
-            <span
-              :class="[
-                'w-10 text-right font-semibold mr-2',
-                r.points >= 0 ? 'text-green-600' : 'text-red-500',
-              ]"
-            >
-              {{ r.points >= 0 ? '+' : '' }}{{ r.points }}
-            </span>
-            <span class="flex-1 truncate">{{ r.reason }}</span>
-            <span class="text-[11px] text-gray-300">{{ new Date(r.timestamp).toLocaleDateString() }}</span>
-          </li>
-        </ul>
-      </section>
-    </main>
+            <router-link to="/" class="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit items-center gap-1.5 rounded-full bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-orange-700">
+              <span class="material-symbols-rounded text-[18px]">arrow_back</span>返回排行榜
+            </router-link>
+          </div>
+        </section>
 
-    <p v-else class="text-center text-red-400 py-10">{{ error }}</p>
+        <p class="mt-6 text-center text-sm text-[#9a735d]">每一次进步都在被看见。</p>
+      </template>
+    </div>
 
-    <AuthModal
-      v-if="showAuth"
-      :student-id="studentId"
-      @success="onAuthSuccess"
-      @close="showAuth = false"
-    />
-    <AdoptModal v-if="showAdopt" @done="onAdoptDone" @close="showAdopt = false" />
+    <Transition>
+      <div v-if="toastMsg" class="fixed inset-x-0 bottom-24 z-[70] flex justify-center px-4">
+        <div class="rounded-full bg-[#38281f] px-4 py-2 text-sm font-medium text-white shadow-lg">{{ toastMsg }}</div>
+      </div>
+    </Transition>
+
+    <AuthModal v-if="showAuth" :student-id="studentId" :has-parent-password="hasParentPassword" @success="onAuthSuccess" @close="showAuth = false" />
+    <AdoptModal v-if="showAdopt" :mode="adoptMode" @done="onAdoptDone" @close="showAdopt = false" />
     <ChangePasswordModal v-if="showChangePwd" @done="showChangePwd = false" @close="showChangePwd = false" />
   </div>
 </template>

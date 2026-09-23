@@ -8,8 +8,8 @@ const SECRET = process.env.CAPTCHA_SECRET || process.env.TOKEN_SECRET || 'pet-ga
  * 无需存储 session，且小朋友不掌握密钥无法伪造 token。
  */
 export function generateCaptcha() {
-  const a = Math.floor(Math.random() * 8) + 2 // 2~9
-  const b = Math.floor(Math.random() * 8) + 2 // 2~9
+  const a = Math.floor(Math.random() * 89) + 11 // 11~99 两位数
+  const b = Math.floor(Math.random() * 89) + 11 // 11~99 两位数
   const answer = a * b
   const token = crypto.createHmac('sha256', SECRET).update(String(answer)).digest('hex')
   return { token, a, b }

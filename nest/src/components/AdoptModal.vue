@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { adopt } from '@/api/parent'
-import { PET_TYPES } from '@/data/pets'
+import { PET_TYPES, getPetLevel1Image } from '@/data/pets'
 
+const props = defineProps<{ mode?: 'adopt' | 'change' }>()
 const emit = defineEmits<{ (e: 'done'): void; (e: 'close'): void }>()
 const selected = ref('')
 const error = ref('')
@@ -31,31 +32,41 @@ async function confirm() {
     class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
     @click.self="emit('close')"
   >
-    <div class="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-5">
-      <h3 class="text-lg font-bold mb-3">领取宠物</h3>
-      <div class="grid grid-cols-3 gap-2 mb-3">
+    <div class="bg-white w-full sm:max-w-sm max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold">{{ mode === 'change' ? '更换宠物' : '领取宠物' }}</h3>
+        <button
+          type="button"
+          class="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100"
+          @click="emit('close')"
+        >
+          <span class="material-symbols-rounded text-[20px]">close</span>
+        </button>
+      </div>
+      <div class="mt-4 grid grid-cols-3 gap-3">
         <button
           v-for="p in PET_TYPES"
           :key="p.id"
+          type="button"
           @click="selected = p.id"
           :class="[
-            'flex flex-col items-center border rounded-xl py-2',
-            selected === p.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200',
+            'relative rounded-2xl border p-2 transition',
+            selected === p.id ? 'border-orange-400 bg-[#fff9f3] ring-2 ring-orange-100' : 'border-slate-100 hover:border-orange-300 hover:shadow-sm'
           ]"
         >
-          <span class="text-2xl">{{ p.mythical ? '✨' : '🐾' }}</span>
-          <span class="text-xs mt-1">{{ p.name }}</span>
+          <span v-if="p.category === 'mythical'" class="absolute right-1.5 top-1.5 z-10 rounded-full bg-white px-1.5 py-0.5 text-xs font-semibold text-[#ae6b44]">神兽</span>
+          <img :src="getPetLevel1Image(p.id)" :alt="p.name" class="aspect-square w-full object-contain" />
+          <span class="mt-1 block text-sm font-bold" :class="selected === p.id ? 'text-[#b85e25]' : ''">{{ p.name }}</span>
         </button>
       </div>
-      <p v-if="error" class="text-sm text-red-500 mb-2">{{ error }}</p>
+      <p v-if="error" class="mt-3 text-sm text-red-500">{{ error }}</p>
       <button
         @click="confirm"
         :disabled="busy"
-        class="w-full bg-orange-500 text-white rounded-xl py-2.5 font-semibold disabled:opacity-50"
+        class="mt-4 w-full rounded-xl bg-orange-500 py-2.5 font-semibold text-white disabled:opacity-50"
       >
-        确认领取
+        {{ mode === 'change' ? '确认更换' : '确认领取' }}
       </button>
-      <button @click="emit('close')" class="w-full text-center text-sm text-gray-400 mt-2">取消</button>
     </div>
   </div>
 </template>

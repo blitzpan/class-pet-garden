@@ -17,6 +17,7 @@ export async function getStudentShare(studentId: string) {
   const { data } = await client.get<{
     student: StudentDetail
     hasPet: boolean
+    hasParentPassword: boolean
     records: EvalRecord[]
     levelConfig: number[]
   }>(`/public/students/${studentId}/share`)

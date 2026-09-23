@@ -10,7 +10,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
-    }
+    },
+    // 开发模式下确保 vue 只被预构建一份，避免 vue-router/pinia 与 app 各自拿到
+    // 不同的 vue 实例导致 provide/inject 的 Symbol 对不上（表现为 <RouterView> 白屏）。
+    dedupe: ['vue']
   },
   server: {
     port: 3001,

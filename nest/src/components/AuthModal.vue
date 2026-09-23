@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { getCaptcha, login as apiLogin, setupPassword } from '@/api/parent'
 import { useAuthStore } from '@/stores/auth'
 
-const props = defineProps<{ studentId: string }>()
+const props = defineProps<{ studentId: string; hasParentPassword?: boolean }>()
 const emit = defineEmits<{ (e: 'success'): void; (e: 'close'): void }>()
 const auth = useAuthStore()
 
@@ -47,8 +47,12 @@ async function submit() {
     const d = e?.response?.data
     if (mode.value === 'login' && d?.code === 'NO_PASSWORD_SET') {
       mode.value = 'setup'
+      password.value = ''
       await loadCaptcha()
-      error.value = '该学生尚未设置家长密码，请先设置（完成验证码）'
+      error.value = ''
+    } else if (mode.value === 'setup' && typeof d?.error === 'string' && d.error.includes('已设置家长密码')) {
+      mode.value = 'login'
+      error.value = '该学生已设置家长密码，请直接登录；忘记密码请联系老师重置。'
     } else {
       error.value = d?.error || '操作失败'
     }
@@ -60,6 +64,8 @@ async function submit() {
 function switchMode() {
   mode.value = mode.value === 'login' ? 'setup' : 'login'
   error.value = ''
+  password.value = ''
+  captchaAnswer.value = ''
   if (mode.value === 'setup') loadCaptcha()
 }
 </script>
@@ -71,7 +77,10 @@ function switchMode() {
   >
     <div class="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-5">
       <h3 class="text-lg font-bold mb-1">{{ mode === 'login' ? '家长登录' : '首次设置家长密码' }}</h3>
-      <p class="text-xs text-gray-400 mb-3">仅有一个密码，无账号。忘记密码请联系管理员重置。</p>
+
+      <div class="mb-3 rounded-xl bg-orange-50 px-3 py-2 text-xs leading-relaxed text-orange-700">
+        登录后可为孩子挑选宠物、记录成长并加减分。若忘记密码，请联系老师重置。
+      </div>
 
       <label class="text-sm text-gray-600">密码</label>
       <input
@@ -100,10 +109,17 @@ function switchMode() {
       >
         {{ busy ? '处理中…' : mode === 'login' ? '登录' : '设置密码并登录' }}
       </button>
-      <button @click="switchMode" class="w-full text-center text-sm text-gray-500 mt-3">
-        {{ mode === 'login' ? '还没有密码？点此设置' : '已有密码？返回登录' }}
+      <button
+        v-if="!hasParentPassword"
+        @click="switchMode"
+        class="w-full text-center text-sm mt-3"
+      >
+        <template v-if="mode === 'login'">
+          <span class="text-gray-500">还没有密码？</span>
+          <span class="font-semibold text-orange-600 underline underline-offset-2">首次使用请先设置家长密码</span>
+        </template>
+        <span v-else class="text-gray-500">已有密码？返回登录</span>
       </button>
-      <button @click="emit('close')" class="w-full text-center text-sm text-gray-400 mt-1">取消</button>
     </div>
   </div>
 </template>
