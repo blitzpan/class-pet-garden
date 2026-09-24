@@ -385,3 +385,73 @@ Get-ChildItem "$Out\*.zip" | Select-Object Name, @{n='MB';e={[math]::Round($_.Le
 
 > 首次运行若提示禁止执行脚本，先执行一次：
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+---
+
+## 10. 在本机把产物跑起来（模拟生产 / Windows 无 OpenResty）
+
+`LOCAL-DEV.md` 是「开三个 dev 服务器边改边看」；这一节是「把已经打包好的 dist 在本机跑起来，模拟服务器上的生产形态」——对应 `D:\workspace\prod` 这种目录。
+
+### 10.1 目录结构
+
+把第 2~4 节打出来的三份产物，按下面结构放好（和 `DEPLOY-PRODUCTION.md` §1.4 一致）：
+
+```
+D:\workspace\prod\
+├── server\          # 后端（即 out\server 的内容：index.js + node_modules + ...）
+├── teacher\         # 教师端 dist 的内容（index.html + assets + pets）
+│   └── static-server.mjs   # 教师端静态服务（prod 自带的运行脚本）
+├── parent\          # 家长端 dist 的内容
+│   └── server.mjs          # 家长端静态服务（prod 自带）
+├── data\            # ★ 数据库 pet-garden.db（千万别删，备份就备份它）
+└── start.ps1        # 一键启动三个服务
+```
+
+> ⚠️ 后端 `server/` 里**不要**放 `dist`：后端进程只跑 API（`index.js` 发现同级没有 `dist/index.html` 就自动不托管前端）。教师端、家长端是各自独立的静态服务。这样就是标准的「1 后端 + 2 前端」三服务，和本文档其它地方、`LOCAL-DEV.md`、`DEPLOY-PRODUCTION.md` 完全一致。
+
+### 10.2 三个服务分别是什么
+
+| 服务 | 端口 | 启动命令 | 干什么 |
+|------|------|----------|--------|
+| ① 后端 API | 3002 | `node server/index.js` | 纯 API（不托管前端），读写 `data/pet-garden.db` |
+| ② 教师端前端 | 3001 | `node teacher/static-server.mjs` | 托管 `teacher/dist` + `/pets` 图片；`/pet-garden/api`（兼容 `/api`）反代到 3002 |
+| ③ 家长端前端 | 3003 | `node parent/server.mjs` | 托管 `parent/dist`；`/pets` 反代到教师端 3001，`/api`（兼容 `/pet-garden/api`）反代到后端 3002 |
+
+> 为什么家长端图片要反代到教师端？因为宠物图片（`/pets/xxx/lv1.webp`）只有教师端构建产物里有（见 `PET_IMAGES_GUIDE.md`）。家长端自己没有这些图，必须去教师端拿。三服务下，教师端前端进程（3001）就是图片源。
+
+### 10.3 一键启动 / 停止
+
+```powershell
+# 启动（三个进程同时拉起，环境变量在 start.ps1 里注入）
+powershell -File D:\workspace\prod\start.ps1
+
+# 停止（按端口杀）
+foreach ($p in @(3001,3002,3003)) {
+  Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue | ForEach-Object {
+    if ($_.OwningProcess -ne 0) { Stop-Process -Id $_.OwningProcess -Force }
+  }
+}
+```
+
+### 10.4 访问地址
+
+| 端 | 地址 |
+|----|------|
+| 教师端 | http://localhost:3001 |
+| 家长端 | http://localhost:3003 |
+| 后端 API | http://localhost:3002 （根路径 `/` 返回 404 是正常的，它只出不带前端的 API） |
+
+### 10.5 验收
+
+```powershell
+(Invoke-WebRequest http://localhost:3002/api/health -UseBasicParsing).Content            # {"status":"ok",...}
+(Invoke-WebRequest http://localhost:3001/pet-garden/api/health -UseBasicParsing).Content  # ok（教师端反代到后端）
+(Invoke-WebRequest http://localhost:3003/api/health -UseBasicParsing).Content            # ok（家长端反代到后端）
+(Invoke-WebRequest http://localhost:3003/pets/bichon/lv1.webp -UseBasicParsing).StatusCode # 200（图片经教师端）
+```
+
+浏览器里再确认：教师端能登录建班；家长端打开邀请链接能看到宠物图片（不是裂图）。
+
+### 10.6 和「真·服务器部署」的区别
+
+`DEPLOY-PRODUCTION.md` 里两个前端是 **OpenResty 托管静态 + 反代**，后端只跑 API。本机模拟只是把 OpenResty 换成了两个 Node 静态服务（`teacher/static-server.mjs` / `parent/server.mjs`），**架构完全等价**：都是「1 后端 + 2 前端」，图片源都是教师端。换到 Linux 服务器部署时照 `DEPLOY-PRODUCTION.md` 走 OpenResty 即可，不用这两个 `.mjs`。

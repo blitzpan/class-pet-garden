@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import {
+  isValidPassword,
+  PASSWORD_MAX_LEN,
+  PASSWORD_MIN_LEN,
+} from '@/utils/sanitize'
 
 const emit = defineEmits<{ (e: 'done'): void; (e: 'close'): void }>()
 const auth = useAuthStore()
@@ -13,6 +18,10 @@ async function submit() {
   error.value = ''
   if (!oldP.value || !newP.value) {
     error.value = '请填写完整'
+    return
+  }
+  if (!isValidPassword(newP.value)) {
+    error.value = `新密码需 ${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN} 位`
     return
   }
   busy.value = true
@@ -37,13 +46,15 @@ async function submit() {
       <input
         v-model="oldP"
         type="password"
+        :maxlength="PASSWORD_MAX_LEN"
         placeholder="原密码"
         class="w-full border rounded-xl px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
       />
       <input
         v-model="newP"
         type="password"
-        placeholder="新密码（至少 4 位）"
+        :maxlength="PASSWORD_MAX_LEN"
+        placeholder="新密码（4-20 位）"
         class="w-full border rounded-xl px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
       />
       <p v-if="error" class="text-sm text-red-500 mb-2">{{ error }}</p>

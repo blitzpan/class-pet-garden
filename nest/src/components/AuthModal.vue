@@ -2,6 +2,11 @@
 import { ref, onMounted } from 'vue'
 import { getCaptcha, login as apiLogin, setupPassword } from '@/api/parent'
 import { useAuthStore } from '@/stores/auth'
+import {
+  isValidPassword,
+  PASSWORD_MAX_LEN,
+  PASSWORD_MIN_LEN,
+} from '@/utils/sanitize'
 
 const props = defineProps<{ studentId: string; hasParentPassword?: boolean }>()
 const emit = defineEmits<{ (e: 'success'): void; (e: 'close'): void }>()
@@ -24,6 +29,10 @@ async function submit() {
   error.value = ''
   if (!password.value) {
     error.value = '请输入密码'
+    return
+  }
+  if (!isValidPassword(password.value)) {
+    error.value = `密码需 ${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN} 位`
     return
   }
   busy.value = true
@@ -86,8 +95,9 @@ function switchMode() {
       <input
         v-model="password"
         type="password"
+        :maxlength="PASSWORD_MAX_LEN"
         class="w-full border rounded-xl px-3 py-2 mt-1 mb-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
-        placeholder="请输入密码（至少 4 位）"
+        placeholder="请输入密码（4-20 位）"
       />
 
       <template v-if="mode === 'setup' && captcha">

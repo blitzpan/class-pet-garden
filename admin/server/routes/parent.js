@@ -5,13 +5,27 @@ import { hashPassword, verifyPassword } from '../utils/password.js'
 import { generateToken } from '../utils/token.js'
 import { generateCaptcha, verifyCaptcha } from '../utils/captcha.js'
 import { calculateLevel } from '../utils/level.js'
-import { isMythicalPet } from '../utils/pets.js'
+import { isMythicalPet, isValidPetType } from '../utils/pets.js'
 import { isClassVipActive } from '../utils/vip.js'
 import { applyEvaluation, EvaluationCooldownError } from '../services/evaluationService.js'
 import { parentAuthMiddleware as parentAuth } from '../middleware/parentAuth.js'
 import { loginRateLimit } from '../middleware/rateLimit.js'
 
 const router = Router()
+
+// 家长端输入约束，需与 nest/src/utils/sanitize.ts 保持一致
+const NAME_MAX_LEN = 5
+const CN_NAME_RE = /^[\u4e00-\u9fa5]{1,5}$/
+const PASSWORD_MIN_LEN = 4
+const PASSWORD_MAX_LEN = 20
+
+function validatePasswordLength(password) {
+  const len = String(password ?? '').length
+  if (len < PASSWORD_MIN_LEN || len > PASSWORD_MAX_LEN) {
+    return `密码长度须为 ${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN} 位`
+  }
+  return null
+}
 
 function issueParentToken(studentId) {
   return generateToken(studentId)
@@ -22,6 +36,7 @@ async function adoptPet(database, studentId, petType) {
   const student = await database.prepare('SELECT * FROM students WHERE id = ?').get(studentId)
   if (!student) throw new Error('学生不存在')
   if (!petType) throw new Error('请选择宠物')
+  if (!isValidPetType(petType)) throw new Error('宠物不存在')
   if (isMythicalPet(petType) && !(await isClassVipActive(database, student.class_id))) {
     throw new Error('神兽伙伴需开通 VIP 后才能领养')
   }
@@ -52,7 +67,8 @@ router.post('/setup', loginRateLimit, async (req, res) => {
   const { studentId, password, captchaToken, captchaAnswer } = req.body
   if (!studentId || !password) return res.status(400).json({ error: '缺少参数' })
   if (!verifyCaptcha(captchaToken, captchaAnswer)) return res.status(400).json({ error: '验证码错误，请重新计算' })
-  if (String(password).length < 4) return res.status(400).json({ error: '密码至少 4 位' })
+  const passwordError = validatePasswordLength(password)
+  if (passwordError) return res.status(400).json({ error: passwordError })
 
   const student = await db.prepare('SELECT id, parent_password_hash FROM students WHERE id = ?').get(studentId)
   if (!student) return res.status(404).json({ error: '学生不存在' })
@@ -84,8 +100,9 @@ router.post('/join', loginRateLimit, async (req, res) => {
   if (!verifyCaptcha(captchaToken, captchaAnswer)) {
     return res.status(400).json({ error: '验证码错误，请重新计算' })
   }
-  if (String(password).length < 4) {
-    return res.status(400).json({ error: '密码至少 4 位' })
+  const passwordError = validatePasswordLength(password)
+  if (passwordError) {
+    return res.status(400).json({ error: passwordError })
   }
   const trimmedName = String(name).trim()
   if (!trimmedName) return res.status(400).json({ error: '请输入孩子姓名' })
@@ -111,6 +128,11 @@ router.post('/join', loginRateLimit, async (req, res) => {
     return res.json({ token: issueParentToken(existing.id), studentId: existing.id, claimed: true })
   }
 
+  // 姓名规则只约束新建的学生；认领老师已建学生的路径不受影响，避免历史姓名无法加入
+  if (!CN_NAME_RE.test(trimmedName)) {
+    return res.status(400).json({ error: `孩子姓名须为 1-${NAME_MAX_LEN} 个中文字符` })
+  }
+
   // 新建学生（与老师单个加入逻辑一致）
   const id = uuidv4()
   const now = Date.now()
@@ -128,7 +150,8 @@ router.get('/me', parentAuth, (req, res) => res.json({ studentId: req.studentId 
 router.post('/change-password', parentAuth, async (req, res) => {
   const { oldPassword, newPassword } = req.body
   if (!oldPassword || !newPassword) return res.status(400).json({ error: '缺少参数' })
-  if (String(newPassword).length < 4) return res.status(400).json({ error: '新密码至少 4 位' })
+  const passwordError = validatePasswordLength(newPassword)
+  if (passwordError) return res.status(400).json({ error: passwordError })
 
   const student = await db.prepare('SELECT parent_password_hash FROM students WHERE id = ?').get(req.studentId)
   if (!student || !student.parent_password_hash) return res.status(400).json({ error: '尚未设置家长密码' })

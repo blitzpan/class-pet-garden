@@ -2,6 +2,13 @@
 import { ref, onMounted } from 'vue'
 import { getCaptcha, join } from '@/api/parent'
 import { useAuthStore } from '@/stores/auth'
+import {
+  isValidChildName,
+  isValidPassword,
+  NAME_MAX_LEN,
+  PASSWORD_MAX_LEN,
+  PASSWORD_MIN_LEN,
+} from '@/utils/sanitize'
 
 const props = defineProps<{ classId: string; className: string }>()
 const emit = defineEmits<{
@@ -35,16 +42,17 @@ function onlyDigits(value: string) {
 
 function goConfirm() {
   error.value = ''
-  if (!childName.value.trim()) {
-    error.value = '请输入孩子姓名'
+  // 姓名不过滤按键（会打断输入法组词），改为提交时校验
+  if (!isValidChildName(childName.value)) {
+    error.value = `请输入孩子姓名，1-${NAME_MAX_LEN} 个中文字符`
     return
   }
   if (inviteCode.value.length !== 6) {
     error.value = '请输入 6 位邀请码'
     return
   }
-  if (password.value.length < 4) {
-    error.value = '家长密码至少 4 位'
+  if (!isValidPassword(password.value)) {
+    error.value = `家长密码需 ${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN} 位`
     return
   }
   step.value = 'confirm'
@@ -93,10 +101,11 @@ async function confirmJoin() {
           填写孩子姓名与老师提供的 6 位邀请码，并设置您的家长密码。
         </p>
 
-        <label class="text-sm text-gray-600">孩子姓名</label>
+        <label class="text-sm text-gray-600">孩子姓名（中文，最多 {{ NAME_MAX_LEN }} 个字）</label>
         <input
           v-model="childName"
           type="text"
+          :maxlength="NAME_MAX_LEN"
           class="w-full border rounded-xl px-3 py-2 mt-1 mb-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
           placeholder="请输入孩子姓名"
         />
@@ -115,8 +124,9 @@ async function confirmJoin() {
         <input
           v-model="password"
           type="password"
+          :maxlength="PASSWORD_MAX_LEN"
           class="w-full border rounded-xl px-3 py-2 mt-1 mb-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
-          placeholder="至少 4 位，用于登录孩子账号"
+          placeholder="4-20 位，用于登录孩子账号"
         />
 
         <template v-if="captcha">

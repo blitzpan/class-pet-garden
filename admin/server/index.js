@@ -27,14 +27,46 @@ import publicRoutes from './routes/public.js'
 import parentRoutes from './routes/parent.js'
 
 const app = express()
-// 本地直接 `node index.js` 时加载 ../.env（若存在），使配置项生效；不覆盖已存在的环境变量
-try {
-  process.loadEnvFile(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.env'))
-} catch {
-  // .env 不存在则忽略
-}
-const PORT = Number(process.env.PORT || 3002)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// 读取配置：优先 ./config/*.env（生产挂载到 /app/config，本地为 admin/server/config），
+// 并兼容旧的 ./.env、../.env 兜底。要求 Node ≥ 20.6（process.loadEnvFile）。
+// 顺序：旧兜底先读，config 目录最后读，故 config 目录里的变量优先级最高。
+const loadedEnvFiles = []
+function loadEnvFrom(target) {
+  try {
+    const stat = fs.statSync(target)
+    if (stat.isDirectory()) {
+      for (const name of fs.readdirSync(target).sort()) {
+        if (!name.endsWith('.env')) continue
+        const fp = path.join(target, name)
+        try {
+          process.loadEnvFile(fp)
+          loadedEnvFiles.push(fp)
+        } catch (e) {
+          console.warn(`[config] 警告：加载 ${fp} 失败：${e.message}`)
+        }
+      }
+    } else if (stat.isFile()) {
+      try {
+        process.loadEnvFile(target)
+        loadedEnvFiles.push(target)
+      } catch (e) {
+        console.warn(`[config] 警告：加载 ${target} 失败：${e.message}`)
+      }
+    }
+  } catch {}
+}
+loadEnvFrom(path.join(__dirname, '.env'))
+loadEnvFrom(path.join(__dirname, '..', '.env'))
+loadEnvFrom(path.join(__dirname, 'config'))
+
+console.log('[config] 已加载配置文件：', loadedEnvFiles.length ? loadedEnvFiles : '（无，仅使用进程环境变量 / 默认值）')
+console.log('[config] SQLITE_PATH =', process.env.SQLITE_PATH || '（未设置）',
+  '| PORT =', process.env.PORT || '（默认 3002）',
+  '| TOKEN_SECRET =', process.env.TOKEN_SECRET ? '（已设置）' : '（未设置）')
+
+const PORT = Number(process.env.PORT || 3002)
 const distPath = path.resolve(__dirname, '../dist')
 const hasFrontendBuild = fs.existsSync(path.join(distPath, 'index.html'))
 

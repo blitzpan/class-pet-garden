@@ -127,7 +127,7 @@ onMounted(load)
           <div class="bg-orange-600 px-6 pb-4 pt-5 text-white">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <h1 class="font-serif text-3xl font-bold">{{ student.name }}</h1>
+                <h1 class="break-all font-serif text-3xl font-bold">{{ student.name }}</h1>
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <button

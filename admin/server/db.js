@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -17,6 +18,16 @@ export function getDbConfig() {
 function getDb() {
   const dbPath = process.env.SQLITE_PATH || path.resolve(__dirname, 'pet-garden.db')
   if (!sqliteDb || openedPath !== dbPath) {
+    const existed = fs.existsSync(dbPath)
+    const dir = path.dirname(dbPath)
+    if (!fs.existsSync(dir)) {
+      console.warn(`[db] 警告：数据库目录不存在，将尝试写入：${dir}`)
+    }
+    console.log(
+      `[db] 打开数据库连接：${dbPath}` +
+        (process.env.SQLITE_PATH ? ' （SQLITE_PATH 已设置）' : ' （SQLITE_PATH 未设置，使用默认路径）') +
+        (existed ? ' （文件已存在）' : ' （新建文件）'),
+    )
     sqliteDb = new Database(dbPath)
     sqliteDb.pragma('journal_mode = WAL')
     sqliteDb.pragma('foreign_keys = ON')
@@ -40,11 +51,10 @@ function normalizeSql(sql) {
 }
 
 function createDbInterface() {
-  const dbh = getDb()
   return {
     prepare(sql) {
       const normalized = normalizeSql(sql)
-      const stmt = dbh.prepare(normalized)
+      const stmt = getDb().prepare(normalized)
       return {
         async get(...params) {
           return stmt.get(...params)
@@ -66,12 +76,13 @@ function createDbInterface() {
         .filter((statement) => statement && !statement.startsWith('--'))
 
       for (const statement of statements) {
-        dbh.exec(statement)
+        getDb().exec(statement)
       }
     },
 
     transaction(fn) {
       return async (...args) => {
+        const dbh = getDb()
         const alreadyIn = dbh.inTransaction
         if (!alreadyIn) dbh.prepare('BEGIN').run()
         try {
