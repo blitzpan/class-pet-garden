@@ -25,6 +25,8 @@ import vipRoutes from './routes/vip.js'
 import adminRoutes from './routes/admin.js'
 import publicRoutes from './routes/public.js'
 import parentRoutes from './routes/parent.js'
+import shareCardRoutes from './routes/shareCard.js'
+import { startShareCardCleaner } from './utils/shareCardCleaner.js'
 
 const app = express()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -76,6 +78,11 @@ async function waitForDatabase(maxAttempts = 30, delayMs = 2000) {
       await initDb()
       return
     } catch (err) {
+      if (attempt === 1) {
+        // 真实原因（SQLITE_BUSY / SQLITE_CANTOPEN 等）只在这里出现一次，
+        // 否则会被下面的"未就绪"重试日志盖住，排查时看不到
+        console.error('[db] 数据库初始化失败：', err.message)
+      }
       if (attempt === maxAttempts) {
         throw err
       }
@@ -133,6 +140,12 @@ function registerFrontendRoutes() {
 // Middleware
 app.set('trust proxy', 1)
 app.use(cors())
+
+// 分享卡路由必须挂在全局 express.json() 之前：它自带 2mb 的 body parser，
+// 而全局默认上限只有 100kb，卡片 base64 后有好几百 KB，走到全局解析会被直接拒掉。
+app.use('/api/public/share-cards', shareCardRoutes)
+app.use('/pet-garden/api/public/share-cards', shareCardRoutes)
+
 app.use(express.json())
 
 const ADMIN_USERNAME = 'admin'
@@ -361,6 +374,7 @@ bootstrap()
     server = httpServer
     const disableDemo = process.env.DISABLE_DEMO === '1' || process.env.DISABLE_DEMO === 'true'
     stopDemoResetScheduler = disableDemo ? null : startDemoResetScheduler(db, getGuestUserId)
+    startShareCardCleaner()
   })
   .catch((err) => {
     console.error('Failed to start server:', err)

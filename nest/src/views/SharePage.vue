@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { getLeaderboard, getStudentShare } from '@/api/public'
+import { getLeaderboard, getStudentShare, uploadShareCard } from '@/api/public'
 import { calculateLevel, getLevelProgress, getPetLevelImage, getPetType } from '@/data/pets'
 import { pickQuote } from '@/data/shareQuotes'
 import { renderShareCard, type ShareCardData } from '@/utils/shareCard'
@@ -33,6 +33,52 @@ function showToast(msg: string) {
 }
 
 const isWechat = /micromessenger/i.test(navigator.userAgent)
+
+const serverCardUrl = ref('')
+const uploading = ref(false)
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+function preloadImage(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve()
+    img.onerror = () => reject(new Error('preload failed'))
+    img.src = url
+  })
+}
+
+async function uploadIfWechat(blob: Blob) {
+  if (!isWechat) return
+  uploading.value = true
+  try {
+    const base64 = await blobToBase64(blob)
+    const result = await uploadShareCard(base64)
+    // 等服务端图片真正可加载后再换 src，否则微信里会闪一下白
+    await preloadImage(result.url)
+    serverCardUrl.value = result.url
+    if (cardUrl.value.startsWith('blob:')) URL.revokeObjectURL(cardUrl.value)
+    cardUrl.value = result.url
+  } catch (e) {
+    console.warn('[share-card] 上传失败，保持 blob URL', e)
+  } finally {
+    uploading.value = false
+  }
+}
+
+function onImgError() {
+  if (serverCardUrl.value && cardBlob.value) {
+    cardUrl.value = URL.createObjectURL(cardBlob.value)
+    serverCardUrl.value = ''
+  }
+}
 
 // ---- 移动端诊断（临时）：只有链接带 ?diag=1 才出现，不落 localStorage、不随跳转传播 ----
 const diagOn = new URLSearchParams(window.location.search).get('diag') === '1'
@@ -138,9 +184,13 @@ async function draw() {
   drawing.value = true
   try {
     const blob = await renderShareCard(buildCardData())
-    if (cardUrl.value) URL.revokeObjectURL(cardUrl.value)
+    if (cardUrl.value.startsWith('blob:')) URL.revokeObjectURL(cardUrl.value)
+    serverCardUrl.value = '' // 新卡片作废旧的服务端 URL
     cardBlob.value = blob
     cardUrl.value = URL.createObjectURL(blob)
+
+    // 微信环境下后台上传，成功后替换为 http URL（支持长按保存/转发）
+    uploadIfWechat(blob)
   } catch (e) {
     drawError = errText(e)
     console.error('[share-card]', e)
@@ -187,17 +237,30 @@ async function onSave() {
       await navigator.share({ files: [file], title: `${student.value?.name || ''}的成长卡`, text: '每一次进步都在被看见' })
       return
     } catch (e: any) {
-      if (e?.name === 'AbortError') return // 用户取消，不再走下载
+      if (e?.name === 'AbortError') return
     }
   }
 
+  // cardUrl 是 blob 时直接用它下载；微信里已换成 http URL（会过期），另建一个 blob URL
+  const isBlobUrl = cardUrl.value.startsWith('blob:')
+  const dlUrl = isBlobUrl ? cardUrl.value : URL.createObjectURL(cardBlob.value)
   const a = document.createElement('a')
-  a.href = cardUrl.value
+  a.href = dlUrl
   a.download = fileName.value
   document.body.appendChild(a)
   a.click()
   a.remove()
-  if (isWechat) showToast('若未自动保存，请长按图片保存')
+  if (!isBlobUrl) setTimeout(() => URL.revokeObjectURL(dlUrl), 1000)
+
+  if (isWechat) {
+    if (serverCardUrl.value) {
+      showToast('长按上方图片即可保存到相册或转发给朋友')
+    } else if (uploading.value) {
+      showToast('正在准备可保存的图片，请稍候再长按')
+    } else {
+      showToast('若未自动保存，请长按图片保存')
+    }
+  }
 }
 
 /** 分享出去的链接不带 diag，避免诊断面板跟着传播 */
@@ -218,7 +281,8 @@ async function onCopyLink() {
 
 onMounted(load)
 onBeforeUnmount(() => {
-  if (cardUrl.value) URL.revokeObjectURL(cardUrl.value)
+  // 只有 blob URL 需要 revoke，http URL 不用
+  if (cardUrl.value.startsWith('blob:')) URL.revokeObjectURL(cardUrl.value)
   if (toastTimer) clearTimeout(toastTimer)
 })
 </script>
@@ -269,6 +333,7 @@ onBeforeUnmount(() => {
           :alt="`${student.name}的成长卡`"
           class="w-full rounded-[24px] shadow-[0_28px_60px_-24px_rgba(120,80,40,0.38)] transition-opacity duration-300"
           :class="drawing ? 'opacity-50' : 'opacity-100'"
+          @error="onImgError"
         />
         <div v-else class="w-full animate-pulse rounded-[24px] bg-[#F3E7DC]" style="aspect-ratio: 750 / 1160" />
 

@@ -99,8 +99,11 @@ onMounted(async () => {
         <section class="overflow-hidden rounded-[1.75rem] bg-white shadow-[0_16px_40px_-16px_rgba(120,80,40,0.18)] ring-1 ring-[#f1e7db]">
           <!-- 团队切换 -->
           <div class="flex items-center gap-2 border-b border-[#f5ece1] bg-gradient-to-r from-[#fffaf4] to-[#fff5ec] px-4 py-3 sm:px-5">
-            <span class="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-bold tracking-wide text-[#b85e25] shadow-[inset_0_0_0_1px_#f0e0d0]">
-              <span class="material-symbols-rounded text-[16px] leading-none">groups</span>团队
+            <span class="flex shrink-0 items-center gap-1.5">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ffeccf]">
+                <span class="material-symbols-rounded text-[18px] text-[#f59e0b]">groups</span>
+              </span>
+              <span class="text-sm font-bold text-[#8a5a33]">团队</span>
             </span>
             <div class="relative min-w-0 flex-1">
               <select
@@ -110,7 +113,7 @@ onMounted(async () => {
               >
                 <option v-for="cls in classes" :key="cls.id" :value="cls.id">{{ cls.name }}</option>
               </select>
-              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#b08968]">
+              <span class="pointer-events-none absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center text-[#b08968]">
                 <span class="material-symbols-rounded text-[20px] leading-none">expand_more</span>
               </span>
             </div>

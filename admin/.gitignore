@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# 运行时上传文件（分享卡等）
+uploads/
+
 # Database
 *.db
 *.db-wal

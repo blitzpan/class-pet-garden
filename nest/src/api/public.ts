@@ -37,3 +37,11 @@ export async function getRules(classId?: string) {
   })
   return data.rules
 }
+
+export async function uploadShareCard(imageBase64: string) {
+  const { data } = await client.post<{ url: string; expiresIn: number }>(
+    '/public/share-cards/upload',
+    { image: imageBase64 },
+  )
+  return data
+}
