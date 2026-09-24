@@ -13,8 +13,6 @@
     "@fontsource/geist": "^5.2.9",
     "@fontsource/geist-mono": "^5.2.8",
     "@fontsource/newsreader": "^5.2.10",
-    "@fontsource/noto-sans-sc": "^5.2.9",
-    "@fontsource/noto-serif-sc": "^5.2.10",
     "axios": "^1.7.7",
     "pinia": "^2.2.4",
     "vue": "^3.5.12",

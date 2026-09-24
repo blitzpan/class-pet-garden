@@ -1,7 +1,8 @@
 @tailwind base;
-@tailwind components;
-@tailwind utilities;
 
+/* 图标字体必须放在 @tailwind utilities 之前：
+   否则下面 .material-symbols-rounded 的 font-size 会盖掉模板里的 text-[Npx]，
+   所有图标都会变成同一个尺寸。 */
 @font-face {
   font-family: 'Material Symbols Rounded';
   font-style: normal;
@@ -28,6 +29,9 @@
   font-feature-settings: 'liga';
 }
 
+@tailwind components;
+@tailwind utilities;
+
 html,
 body,
 #app {
@@ -37,7 +41,7 @@ body,
 body {
   margin: 0;
   background: #fffaf5;
-  font-family: 'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: 'Geist', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: #38281f;
   -webkit-tap-highlight-color: transparent;
 }

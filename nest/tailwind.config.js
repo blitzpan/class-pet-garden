@@ -3,11 +3,13 @@ export default {
   content: ['./index.html', './src/**/*.{vue,ts}'],
   theme: {
     extend: {
+      // 中文一律不挂 Web Font：一个中文字重 1.1~1.5MB，移动端首屏扛不住。
+      // 中文由系统字体兜底（iOS 苹方 / 安卓系统黑体 / Windows 雅黑）。
       fontFamily: {
-        sans: ['Geist', '"Noto Sans SC"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
-        serif: ['Newsreader', '"Noto Serif SC"', '"Songti SC"', 'serif'],
-        brand: ['"Funnel Sans"', '"Noto Sans SC"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
-        mono: ['"Geist Mono"', '"Noto Sans SC"', 'monospace'],
+        sans: ['Geist', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
+        serif: ['Newsreader', '"Songti SC"', 'serif'],
+        brand: ['"Funnel Sans"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
+        mono: ['"Geist Mono"', 'monospace'],
       },
     },
   },

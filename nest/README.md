@@ -26,6 +26,7 @@ npm run dev          # 默认 http://localhost:5173
 
 ## 前端要点（开发时需要知道）
 
+- ⚠️ **动字体前先看 [`docs/icon-font-subset.md`](docs/icon-font-subset.md)**：图标字体是子集化的，新增图标必须重跑 `python scripts/subset-icon-font.py`，否则新图标会显示成英文原字；中文一律不加载 Web Font。
 - 路由为 HTML5 History 模式（`createWebHistory()`），**部署时 Web 服务器必须配置 SPA 回退**（`try_files $uri $uri/ /index.html`），否则刷新子页面会 404。
 - 接口基址由构建期变量 `VITE_API_BASE` 决定，默认 `/api`（同域部署无需修改）。
 - 宠物图片路径写死为 `/pets/{宠物ID}/lv{等级}.webp`，图片源文件在教师端 `admin/public/pets`。

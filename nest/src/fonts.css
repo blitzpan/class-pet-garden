@@ -18,13 +18,5 @@
 @import '@fontsource/newsreader/latin-600.css';
 @import '@fontsource/newsreader/latin-700.css';
 
-/* 中文字体：仅加载简体子集 */
-@import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
-@import '@fontsource/noto-sans-sc/chinese-simplified-500.css';
-@import '@fontsource/noto-sans-sc/chinese-simplified-600.css';
-@import '@fontsource/noto-sans-sc/chinese-simplified-700.css';
-@import '@fontsource/noto-sans-sc/chinese-simplified-800.css';
-
-@import '@fontsource/noto-serif-sc/chinese-simplified-400.css';
-@import '@fontsource/noto-serif-sc/chinese-simplified-600.css';
-@import '@fontsource/noto-serif-sc/chinese-simplified-700.css';
+/* 中文不加载 Web Font：一个中文字重就要 1.1~1.5MB，移动端首屏扛不住。
+   中文统一走系统字体（iOS 苹方 / 安卓系统黑体），见 tailwind.config.js。 */
