@@ -10,6 +10,7 @@ import { isClassVipActive } from '../utils/vip.js'
 import { applyEvaluation, EvaluationCooldownError } from '../services/evaluationService.js'
 import { parentAuthMiddleware as parentAuth } from '../middleware/parentAuth.js'
 import { loginRateLimit } from '../middleware/rateLimit.js'
+import { getDayTimestampRange } from '../utils/dateRange.js'
 
 const router = Router()
 
@@ -18,6 +19,23 @@ const NAME_MAX_LEN = 5
 const CN_NAME_RE = /^[\u4e00-\u9fa5]{1,5}$/
 const PASSWORD_MIN_LEN = 4
 const PASSWORD_MAX_LEN = 20
+
+// 家长端容量约束（教师端不受限）
+export const PARENT_JOIN_CLASS_STUDENT_LIMIT = 100
+export const PARENT_DAILY_SCORE_LIMIT = 20
+
+async function countClassStudents(database, classId) {
+  const row = await database.prepare('SELECT COUNT(*) AS count FROM students WHERE class_id = ?').get(classId)
+  return row?.count ?? 0
+}
+
+async function countTodayEvaluations(database, studentId, nowMs = Date.now()) {
+  const { start, end } = getDayTimestampRange(new Date(nowMs))
+  const row = await database.prepare(
+    'SELECT COUNT(*) AS count FROM evaluation_records WHERE student_id = ? AND timestamp >= ? AND timestamp <= ?'
+  ).get(studentId, start, end)
+  return row?.count ?? 0
+}
 
 function validatePasswordLength(password) {
   const len = String(password ?? '').length
@@ -133,6 +151,15 @@ router.post('/join', loginRateLimit, async (req, res) => {
     return res.status(400).json({ error: `孩子姓名须为 1-${NAME_MAX_LEN} 个中文字符` })
   }
 
+  // 家长端加人受班级人数上限约束（认领已有学生不增加人数，故放在认领之后）
+  const studentCount = await countClassStudents(db, classId)
+  if (studentCount >= PARENT_JOIN_CLASS_STUDENT_LIMIT) {
+    return res.status(400).json({
+      error: `该班级人数已达上限 ${PARENT_JOIN_CLASS_STUDENT_LIMIT} 人，请联系老师添加`,
+      code: 'CLASS_FULL'
+    })
+  }
+
   // 新建学生（与老师单个加入逻辑一致）
   const id = uuidv4()
   const now = Date.now()
@@ -181,6 +208,15 @@ router.post('/score', parentAuth, async (req, res) => {
     if (!student) return res.status(404).json({ error: '学生不存在' })
     const rule = await db.prepare('SELECT * FROM evaluation_rules WHERE id = ?').get(ruleId)
     if (!rule) return res.status(404).json({ error: '规则不存在' })
+
+    // 家长端每天最多提交 PARENT_DAILY_SCORE_LIMIT 个加减分项目（教师端不受限）
+    const todayCount = await countTodayEvaluations(db, req.studentId)
+    if (todayCount >= PARENT_DAILY_SCORE_LIMIT) {
+      return res.status(429).json({
+        error: `今天已完成 ${PARENT_DAILY_SCORE_LIMIT} 个加减分项目，明天再来吧`,
+        code: 'DAILY_LIMIT'
+      })
+    }
 
     const result = await applyEvaluation(db, {
       classId: student.class_id,
