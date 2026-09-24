@@ -13,7 +13,7 @@ export async function getLeaderboard(classId: string) {
   return data.students
 }
 
-export async function getStudentShare(studentId: string) {
+export async function getStudentShare(studentId: string, before?: number) {
   const { data } = await client.get<{
     student: StudentDetail
     hasPet: boolean
@@ -21,7 +21,13 @@ export async function getStudentShare(studentId: string) {
     records: EvalRecord[]
     levelConfig: number[]
     checkinDays: number
-  }>(`/public/students/${studentId}/share`)
+    streakDays: number
+    /** 东八区今天 YYYY-MM-DD */
+    today: string
+    hasMore: boolean
+  }>(`/public/students/${studentId}/share`, {
+    params: before ? { before } : undefined,
+  })
   return data
 }
 

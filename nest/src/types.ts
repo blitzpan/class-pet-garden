@@ -31,6 +31,8 @@ export interface EvalRecord {
   reason: string
   category: string
   timestamp: number
+  /** 东八区自然日 YYYY-MM-DD，由后端给出，前端按它分组 */
+  day: string
 }
 
 export interface Rule {

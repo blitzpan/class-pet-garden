@@ -5,6 +5,7 @@ import { getLeaderboard, getStudentShare } from '@/api/public'
 import { calculateLevel, getLevelProgress, getPetLevelImage, getPetType } from '@/data/pets'
 import { pickQuote } from '@/data/shareQuotes'
 import { renderShareCard, type ShareCardData } from '@/utils/shareCard'
+import { envInfo, errText, probeCanvas, probeImage } from '@/utils/shareDiag'
 import type { EvalRecord, StudentDetail as SD } from '@/types'
 
 const route = useRoute()
@@ -32,6 +33,50 @@ function showToast(msg: string) {
 }
 
 const isWechat = /micromessenger/i.test(navigator.userAgent)
+
+// ---- 移动端诊断（临时）：分享链接加 ?diag=1，?diag=0 关闭 ----
+const DIAG_KEY = 'pg_diag'
+const diagParam = new URLSearchParams(window.location.search).get('diag')
+if (diagParam === '1') localStorage.setItem(DIAG_KEY, '1')
+if (diagParam === '0') localStorage.removeItem(DIAG_KEY)
+const diagOn = diagParam === '1' || localStorage.getItem(DIAG_KEY) === '1'
+const diagText = ref('')
+let drawError = ''
+
+async function runDiag() {
+  diagText.value = [
+    ...envInfo(),
+    await probeImage(petImageUrl.value),
+    ...(await probeCanvas()),
+    drawError ? `draw() 抛错: ${drawError}` : 'draw() 未抛错',
+  ].join('\n')
+}
+
+async function copyDiag() {
+  const text = diagText.value
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast('诊断信息已复制')
+    return
+  } catch {
+    /* 老 WebView 没有 clipboard API，走下面兜底 */
+  }
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('style', 'position:fixed;top:0;left:0;opacity:0')
+  document.body.appendChild(ta)
+  ta.select()
+  ta.setSelectionRange(0, text.length)
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  ta.remove()
+  showToast(ok ? '诊断信息已复制' : '复制失败，请长按上方文本手动复制')
+}
+// ---- /移动端诊断 ----
 
 const displayLevel = computed(() => (student.value ? calculateLevel(student.value.pet_exp) : 1))
 const progress = computed(() => getLevelProgress(student.value?.pet_exp || 0))
@@ -91,7 +136,9 @@ async function draw() {
     if (cardUrl.value) URL.revokeObjectURL(cardUrl.value)
     cardBlob.value = blob
     cardUrl.value = URL.createObjectURL(blob)
-  } catch {
+  } catch (e) {
+    drawError = errText(e)
+    console.error('[share-card]', e)
     showToast('图片生成失败，请重试')
   } finally {
     drawing.value = false
@@ -118,6 +165,7 @@ async function load() {
 
     quote.value = pickQuote(quoteCtx.value)
     await draw()
+    if (diagOn) await runDiag()
   } catch {
     notFound.value = true
   } finally {
@@ -228,6 +276,21 @@ onBeforeUnmount(() => {
         </div>
 
         <p v-if="isWechat" class="mt-4 text-[12.5px] text-[#A9764C]">微信里请长按上方图片保存到相册</p>
+
+        <div v-if="diagText" class="mt-6 w-full rounded-2xl border border-[#E6D3C2] bg-white p-3">
+          <div class="mb-2 flex items-center justify-between gap-3">
+            <span class="text-[12px] font-semibold text-[#8A796B]">诊断信息（截图或复制后发给开发）</span>
+            <button
+              type="button"
+              class="shrink-0 rounded-full bg-[#F3E7DC] px-3 py-1 text-[12px] font-medium text-[#6B5849]"
+              @click="copyDiag"
+            >
+              复制
+            </button>
+          </div>
+          <pre class="select-all whitespace-pre-wrap break-all text-[11px] leading-5 text-[#3A2F28]">{{ diagText }}</pre>
+          <button type="button" class="mt-3 text-[11px] text-[#BCAEA1] underline" @click="runDiag">重新检测</button>
+        </div>
       </div>
     </div>
 

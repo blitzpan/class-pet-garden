@@ -22,6 +22,15 @@ interface ShareRecord {
   reason: string
   category: string
   timestamp: number
+  /** 东八区自然日，由后端给出 */
+  day: string
+}
+
+// 与家长端同口径：只展示最近 7 个自然日，长假则回退到最近 7 个有记录的日子
+const WINDOW_DAYS = 7
+function shiftDay(day: string, delta: number) {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d) + delta * 86400000).toISOString().slice(0, 10)
 }
 
 const route = useRoute()
@@ -31,6 +40,18 @@ const loading = ref(true)
 const notFound = ref(false)
 const student = ref<ShareStudent | null>(null)
 const records = ref<ShareRecord[]>([])
+const today = ref('')
+
+const displayRecords = computed<ShareRecord[]>(() => {
+  if (!today.value || !records.value.length) return records.value
+  const start = shiftDay(today.value, -(WINDOW_DAYS - 1))
+  const recent = records.value.filter((r) => r.day >= start)
+  if (recent.length) return recent
+  const days: string[] = []
+  for (const r of records.value) if (!days.includes(r.day)) days.push(r.day)
+  const keep = new Set(days.slice(0, WINDOW_DAYS))
+  return records.value.filter((r) => keep.has(r.day))
+})
 
 const publicApi = axios.create({
   baseURL: '/pet-garden/api'
@@ -81,6 +102,7 @@ onMounted(async () => {
     const res = await publicApi.get(`/public/students/${studentId}/share`)
     student.value = res.data.student
     records.value = res.data.records || []
+    today.value = res.data.today || ''
   } catch (error) {
     console.error('加载分享记录失败:', error)
     notFound.value = true
@@ -150,12 +172,12 @@ onMounted(async () => {
           <div class="p-6">
             <div class="flex items-center justify-between">
               <h2 class="font-serif text-xl font-bold text-[#422d20]">成长记录</h2>
-              <span class="text-sm text-[#9a735d]">共 {{ records.length }} 条</span>
+              <span class="text-sm text-[#9a735d]">近 {{ WINDOW_DAYS }} 天 · {{ displayRecords.length }} 条</span>
             </div>
 
-            <div v-if="records.length" class="mt-4 space-y-2">
+            <div v-if="displayRecords.length" class="mt-4 space-y-2">
               <article
-                v-for="record in records"
+                v-for="record in displayRecords"
                 :key="record.id"
                 class="flex items-center justify-between rounded-xl bg-[#fff8f2] px-4 py-3"
               >

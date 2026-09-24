@@ -9,6 +9,7 @@ import AuthModal from '@/components/AuthModal.vue'
 import AdoptModal from '@/components/AdoptModal.vue'
 import ScorePanel from '@/components/ScorePanel.vue'
 import ChangePasswordModal from '@/components/ChangePasswordModal.vue'
+import GrowthTimeline from '@/components/GrowthTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +20,11 @@ const student = ref<SD | null>(null)
 const hasPet = ref(false)
 const hasParentPassword = ref(false)
 const records = ref<EvalRecord[]>([])
+const today = ref('')
+const hasMore = ref(false)
+const checkinDays = ref(0)
+const streakDays = ref(0)
+const loadingMore = ref(false)
 const rules = ref<Rule[]>([])
 const classId = ref<string>('')
 const loading = ref(true)
@@ -39,22 +45,6 @@ const petImage = computed(() => {
   return getPetLevelImage(student.value.pet_type, student.value.pet_level)
 })
 
-// 成长记录：取「有打卡记录的最后的 7 天」（按天倒序，不要求连续）
-const displayRecords = computed<EvalRecord[]>(() => {
-  const days = new Set<string>()
-  const result: EvalRecord[] = []
-  for (const r of records.value) {
-    const d = new Date(r.timestamp)
-    const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
-    if (!days.has(key)) {
-      if (days.size >= 7) break
-      days.add(key)
-    }
-    result.push(r)
-  }
-  return result
-})
-
 // 分享：跳到独立的分享页（对外展示的成长卡，可保存图片或复制链接）
 function openShare() {
   router.push({ name: 'share', params: { studentId } })
@@ -69,6 +59,10 @@ async function load() {
     hasPet.value = d.hasPet
     hasParentPassword.value = d.hasParentPassword
     records.value = d.records
+    today.value = d.today
+    hasMore.value = d.hasMore
+    checkinDays.value = d.checkinDays || 0
+    streakDays.value = d.streakDays || 0
     if (auth.isLoggedIn) rules.value = await getRules(classId.value)
   } catch {
     notFound.value = true
@@ -86,13 +80,21 @@ function onAdoptDone() {
   load()
 }
 
-function formatRecordTime(timestamp?: number) {
-  if (!timestamp) return ''
-  const date = new Date(timestamp)
-  const now = new Date()
-  const isToday = date.toDateString() === now.toDateString()
-  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  return isToday ? `今天 ${time}` : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value) return
+  loadingMore.value = true
+  try {
+    const before = records.value.reduce(
+      (min, r) => (r.timestamp && (!min || r.timestamp < min) ? r.timestamp : min),
+      0,
+    )
+    const d = await getStudentShare(studentId, before)
+    const known = new Set(records.value.map((r) => r.id))
+    records.value = [...records.value, ...d.records.filter((r) => !known.has(r.id))]
+    hasMore.value = d.hasMore
+  } finally {
+    loadingMore.value = false
+  }
 }
 
 onMounted(load)
@@ -211,31 +213,16 @@ onMounted(load)
               <p v-else class="text-sm text-[#9a735d]">该班级暂无可用的评价规则。</p>
             </section>
 
-            <!-- 成长记录 -->
-            <div class="flex items-center justify-between">
-              <h2 class="font-serif text-xl font-bold text-[#422d20]">成长记录</h2>
-              <span class="text-sm text-[#9a735d]">近 7 个打卡日 · 共 {{ displayRecords.length }} 条</span>
-            </div>
-
-            <div v-if="displayRecords.length" class="mt-4 space-y-2">
-              <article
-                v-for="record in displayRecords"
-                :key="record.id"
-                class="flex items-center justify-between rounded-xl bg-[#fff8f2] px-4 py-3"
-              >
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-medium text-[#4d3527]">{{ record.reason }}</p>
-                  <p class="mt-1 text-sm text-[#b0927c]">{{ record.category }} · {{ formatRecordTime(record.timestamp) }}</p>
-                </div>
-                <span
-                  class="ml-3 shrink-0 text-sm font-bold tabular-nums"
-                  :class="record.points > 0 ? 'text-emerald-600' : record.points < 0 ? 'text-rose-600' : 'text-slate-500'"
-                >
-                  {{ record.points > 0 ? '+' : '' }}{{ record.points }}
-                </span>
-              </article>
-            </div>
-            <p v-else class="mt-6 rounded-2xl bg-[#fff8f2] px-4 py-10 text-center text-sm text-[#9a735d]">还没有成长记录，继续加油！</p>
+            <!-- 成长记录：按天分组 + 一周概览 -->
+            <GrowthTimeline
+              :records="records"
+              :today="today"
+              :checkin-days="checkinDays"
+              :streak-days="streakDays"
+              :has-more="hasMore"
+              :loading-more="loadingMore"
+              @load-more="loadMore"
+            />
 
             <router-link to="/" class="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit items-center gap-1.5 rounded-full bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-orange-700">
               <span class="material-symbols-rounded text-[18px]">arrow_back</span>返回排行榜
