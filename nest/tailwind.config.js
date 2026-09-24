@@ -11,6 +11,16 @@ export default {
         brand: ['"Funnel Sans"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
         mono: ['"Geist Mono"', 'monospace'],
       },
+      keyframes: {
+        // 呼吸感：轻微缩放 + 外扩光环，用于引导性主按钮（如「领养宠物」）
+        breathe: {
+          '0%, 100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(255,255,255,0.5)' },
+          '50%': { transform: 'scale(1.05)', boxShadow: '0 0 0 10px rgba(255,255,255,0)' },
+        },
+      },
+      animation: {
+        breathe: 'breathe 2s ease-in-out infinite',
+      },
     },
   },
   plugins: [],

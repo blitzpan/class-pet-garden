@@ -24,6 +24,7 @@ const step = ref<Step>('form')
 const childName = ref('')
 const inviteCode = ref('')
 const password = ref('')
+const confirmPassword = ref('')
 const captcha = ref<{ token: string; a: number; b: number } | null>(null)
 const captchaAnswer = ref('')
 const error = ref('')
@@ -53,6 +54,10 @@ function goConfirm() {
   }
   if (!isValidPassword(password.value)) {
     error.value = `家长密码需 ${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN} 位`
+    return
+  }
+  if (confirmPassword.value !== password.value) {
+    error.value = '两次输入的家长密码不一致'
     return
   }
   step.value = 'confirm'
@@ -127,6 +132,15 @@ async function confirmJoin() {
           :maxlength="PASSWORD_MAX_LEN"
           class="w-full border rounded-xl px-3 py-2 mt-1 mb-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
           placeholder="4-20 位，用于登录孩子账号"
+        />
+
+        <label class="text-sm text-gray-600">确认家长密码</label>
+        <input
+          v-model="confirmPassword"
+          type="password"
+          :maxlength="PASSWORD_MAX_LEN"
+          class="w-full border rounded-xl px-3 py-2 mt-1 mb-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
+          placeholder="请再次输入家长密码"
         />
 
         <template v-if="captcha">

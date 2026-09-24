@@ -45,3 +45,10 @@ body {
   color: #38281f;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* 用户在系统里关闭了动效时，停掉呼吸动画 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-breathe {
+    animation: none;
+  }
+}

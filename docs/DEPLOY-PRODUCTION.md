@@ -405,7 +405,9 @@ curl -IL https://nest.lemonlab.top/pets/bichon/lv1.webp
 浏览器里再确认：
 - [ ] 教师端能注册 / 登录，能建班级、加学生、加分
 - [ ] 教师端刷新子页面（如 `/ranking`）不 404（SPA 回退生效，见 3.4）
-- [ ] 家长端分享链接 `https://nest.lemonlab.top/student/{学生ID}` 用**新标签页**直接打开能正常显示该学生页（不是 404、也不是跳回首页，见 4.3）
+- [ ] 家长端分享链接 `https://nest.lemonlab.top/student/{学生ID}` 用**新标签页**直接打开能正常显示该学生页（不是 404、也不是跳回首页，见 4.4）
+- [ ] 家长端分享页 `https://nest.lemonlab.top/share/{学生ID}` 能打开、能生成成长卡图片（依赖 4.4 的 SPA 回退 + 4.3 的同源图片；图片一旦跨域，卡片就生成不出来）
+- [ ] 分享页在微信内长按卡片可保存到相册；在 Safari / Chrome 上「分享图片」能呼起系统分享
 - [ ] 教师端宠物图片正常（直接访问 `https://teacher.lemonlab.top/pets/bichon/lv1.webp`）
 - [ ] 教师端「邀请家长」能复制出 `https://nest.lemonlab.top/?classId=xxx`
 - [ ] 家长端打开邀请链接能看到孩子、能设密码登录
@@ -428,7 +430,7 @@ curl -IL https://nest.lemonlab.top/pets/bichon/lv1.webp
 | 家长端图片全裂图（404） | 教师端根目录没传 `pets/`；或 4.3 的 `location ^~ /pet` 没加、`root` 路径写错；或还在用 `/pets` 反代却把后端域名写成了 `$host`（会向自己要图） |
 | 家长端图片请求返回 301 | **不正常**（不再是既定行为）：说明还在走 `/pets` 反代，教师端的强制 HTTPS 把浏览器支到了 teacher 域名。按 **4.3** 改成直接读教师端目录。只要还有 301，前端把图画进 Canvas 再导出就会被浏览器拒绝 |
 | 家长端图片 502 | `/pets` 反代目标写成了 `https://127.0.0.1:443` 这类 HTTPS 回环（nginx 转发时默认不发 SNI，会被默认站点拒绝握手）。同样按 **4.3** 改直读目录 |
-| 刷新子页面 / 分享链接直接打开 404（nginx 原生 404 页） | 站点缺 SPA 回退：在站点配置文件 `server { }` 里加 `error_page 404 =200 /index.html;` 并重载（见 3.4 / 4.3）。**用面板「伪静态」填无效**（静态网站不生效）；写成跳转到 `/` 也不行（会丢掉目标页面） |
+| 刷新子页面 / 分享链接直接打开 404（nginx 原生 404 页） | 站点缺 SPA 回退：在站点配置文件 `server { }` 里加 `error_page 404 =200 /index.html;` 并重载（见 3.4 / 4.4）。**用面板「伪静态」填无效**（静态网站不生效）；写成跳转到 `/` 也不行（会丢掉目标页面） |
 | 加了回退之后接口返回网页代码 | 回退写错位置，把 `/api`、`/pets` 也吃掉了。只保留 `error_page` 那一行（它只在 nginx 自身 404 时生效，不透传的上游响应不受影响），或改回 `location /` 里写 `try_files` |
 | 页面白屏、一堆 404 | dist 传错位置（多套了一层 `dist`），或站点根目录指错 |
 | 邀请链接域名不对 / 是空的 | `PARENT_APP_BASE_URL` 没配或配错，应为 `https://nest.lemonlab.top`，改完重启 Node 项目 |

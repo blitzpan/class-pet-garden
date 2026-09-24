@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 
 const PASSWORD_MIN_LEN = 6
@@ -14,6 +14,14 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const error = ref('')
 const submitting = ref(false)
+
+// 服务端只存哈希，拿不到旧密码；浏览器密码管理器可能回填已保存的密码，这里一律清掉
+const oldPasswordTypedByUser = ref(false)
+watch(oldPassword, (value) => {
+  if (value && !oldPasswordTypedByUser.value) {
+    oldPassword.value = ''
+  }
+})
 
 async function submit() {
   error.value = ''
@@ -71,9 +79,11 @@ function close() {
           v-model="oldPassword"
           type="password"
           :maxlength="PASSWORD_MAX_LEN"
-          autocomplete="current-password"
+          autocomplete="off"
           placeholder="原密码"
           class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400"
+          @keydown="oldPasswordTypedByUser = true"
+          @paste="oldPasswordTypedByUser = true"
           @keyup.enter="submit"
         />
         <input

@@ -20,6 +20,7 @@ export async function getStudentShare(studentId: string) {
     hasParentPassword: boolean
     records: EvalRecord[]
     levelConfig: number[]
+    checkinDays: number
   }>(`/public/students/${studentId}/share`)
   return data
 }

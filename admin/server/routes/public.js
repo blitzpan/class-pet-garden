@@ -64,7 +64,20 @@ router.get('/students/:studentId/share', async (req, res) => {
     try { levelConfig = JSON.parse(levelConfigRow.value) } catch { /* 用默认 */ }
   }
 
-  res.json({ student, hasPet, hasParentPassword, records, levelConfig })
+  // 累计打卡天数：按「东八区的自然日」去重，供家长端分享卡片展示
+  const checkinRow = await db.prepare(`
+    SELECT COUNT(DISTINCT date(timestamp / 1000, 'unixepoch', '+8 hours')) AS days
+    FROM evaluation_records WHERE student_id = ?
+  `).get(req.params.studentId)
+
+  res.json({
+    student,
+    hasPet,
+    hasParentPassword,
+    records,
+    levelConfig,
+    checkinDays: Number(checkinRow?.days || 0),
+  })
 })
 
 export default router

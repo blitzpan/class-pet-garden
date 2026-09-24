@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { calculateLevel, getLevelProgress, getPetType, getPetLevelImage } from '@/data/pets'
 import { getStudentShare, getRules } from '@/api/public'
 import type { StudentDetail as SD, EvalRecord, Rule } from '@/types'
@@ -11,6 +11,7 @@ import ScorePanel from '@/components/ScorePanel.vue'
 import ChangePasswordModal from '@/components/ChangePasswordModal.vue'
 
 const route = useRoute()
+const router = useRouter()
 const studentId = route.params.studentId as string
 const auth = useAuthStore()
 
@@ -54,22 +55,9 @@ const displayRecords = computed<EvalRecord[]>(() => {
   return result
 })
 
-const toastMsg = ref('')
-let toastTimer: ReturnType<typeof setTimeout> | undefined
-function showToast(msg: string) {
-  toastMsg.value = msg
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (toastMsg.value = ''), 2000)
-}
-
-const shareUrl = computed(() => window.location.href)
-async function copyShareLink() {
-  try {
-    await navigator.clipboard.writeText(shareUrl.value)
-    showToast('分享链接已复制')
-  } catch {
-    showToast('复制失败，请手动复制地址栏链接')
-  }
+// 分享：跳到独立的分享页（对外展示的成长卡，可保存图片或复制链接）
+function openShare() {
+  router.push({ name: 'share', params: { studentId } })
 }
 
 async function load() {
@@ -133,10 +121,10 @@ onMounted(load)
                 <button
                   type="button"
                   class="inline-flex h-9 items-center gap-1 rounded-full bg-white/10 px-3 text-sm font-semibold text-white transition hover:bg-white/20"
-                  @click="copyShareLink"
+                  @click="openShare"
                 >
                   <span class="material-symbols-rounded text-[18px]">share</span>
-                  <span class="hidden sm:inline">复制链接</span>
+                  <span class="hidden sm:inline">分享</span>
                 </button>
                 <button
                   v-if="!auth.isLoggedIn"
@@ -196,7 +184,7 @@ onMounted(load)
                   <button
                     v-else-if="sameStudent"
                     type="button"
-                    class="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold text-white transition hover:bg-white/30"
+                    class="animate-breathe rounded-full bg-orange-500 px-4 py-1.5 text-sm font-semibold text-white shadow-lg shadow-orange-900/20 hover:bg-orange-400"
                     @click="adoptMode = 'adopt'; showAdopt = true"
                   >
                     领养宠物
@@ -259,14 +247,13 @@ onMounted(load)
       </template>
     </div>
 
-    <Transition>
-      <div v-if="toastMsg" class="fixed inset-x-0 bottom-24 z-[70] flex justify-center px-4">
-        <div class="rounded-full bg-[#38281f] px-4 py-2 text-sm font-medium text-white shadow-lg">{{ toastMsg }}</div>
-      </div>
-    </Transition>
-
     <AuthModal v-if="showAuth" :student-id="studentId" :has-parent-password="hasParentPassword" @success="onAuthSuccess" @close="showAuth = false" />
-    <AdoptModal v-if="showAdopt" :mode="adoptMode" @done="onAdoptDone" @close="showAdopt = false" />
+    <AdoptModal
+      v-if="showAdopt"
+      :mode="adoptMode"
+      @done="onAdoptDone"
+      @close="showAdopt = false"
+    />
     <ChangePasswordModal v-if="showChangePwd" @done="showChangePwd = false" @close="showChangePwd = false" />
   </div>
 </template>

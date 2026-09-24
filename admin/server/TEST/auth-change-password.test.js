@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import express from 'express'
 import authRoutes from '../routes/auth.js'
@@ -26,7 +27,6 @@ async function getPasswordHash(userId) {
 }
 
 beforeAll(async () => {
-  db = await setupTestDb()
   const app = express()
   app.use(express.json())
   app.use('/auth', authRoutes)
@@ -44,6 +44,7 @@ describe('教师修改密码接口', () => {
   const guestId = 'guest-1'
 
   beforeEach(async () => {
+    db = await setupTestDb()
     const now = Date.now()
     await db.prepare('INSERT INTO users (id, username, password_hash, is_guest, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(teacherId, '13800000000', hashPassword('123456'), 0, now)

@@ -15,12 +15,21 @@ const current = computed(() => {
 
 const busy = ref<string | null>(null)
 const error = ref('')
+const pending = ref<Rule | null>(null)
 
-async function doScore(rule: Rule) {
+function askScore(rule: Rule) {
+  error.value = ''
+  pending.value = rule
+}
+
+async function confirmScore() {
+  const rule = pending.value
+  if (!rule) return
   busy.value = rule.id
   error.value = ''
   try {
     await score(rule.id)
+    pending.value = null
     emit('scored')
   } catch (e: any) {
     error.value = e?.response?.data?.error || '操作失败'
@@ -56,11 +65,44 @@ async function doScore(rule: Rule) {
           r.points >= 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
         ]"
         :disabled="busy === r.id"
-        @click="doScore(r)"
+        @click="askScore(r)"
       >
         <span class="min-w-0 truncate">{{ r.name }}</span>
         <span class="shrink-0 font-bold tabular-nums">{{ r.points > 0 ? '+' : '' }}{{ r.points }}</span>
       </button>
+    </div>
+
+    <div
+      v-if="pending"
+      class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+      @click.self="pending = null"
+    >
+      <div class="w-full rounded-t-3xl bg-white p-5 sm:max-w-sm sm:rounded-3xl">
+        <h3 class="text-lg font-bold">确认{{ pending.points >= 0 ? '加分' : '减分' }}？</h3>
+        <p class="mt-2 text-sm text-gray-600">
+          项目「<span class="font-semibold text-gray-800">{{ pending.name }}</span>」，
+          <span :class="pending.points >= 0 ? 'font-semibold text-emerald-600' : 'font-semibold text-rose-600'">
+            {{ pending.points > 0 ? '+' : '' }}{{ pending.points }} 分
+          </span>
+        </p>
+        <p v-if="error" class="mt-2 text-sm text-red-500">{{ error }}</p>
+        <button
+          type="button"
+          class="mt-4 w-full rounded-xl bg-orange-500 py-2.5 font-semibold text-white disabled:opacity-50"
+          :disabled="busy !== null"
+          @click="confirmScore"
+        >
+          {{ busy !== null ? '提交中…' : '确认' }}
+        </button>
+        <button
+          type="button"
+          class="mt-2 w-full text-center text-sm text-gray-400"
+          :disabled="busy !== null"
+          @click="pending = null"
+        >
+          取消
+        </button>
+      </div>
     </div>
   </div>
 </template>
