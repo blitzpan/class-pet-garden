@@ -10,6 +10,10 @@ import { registerRateLimit, loginRateLimit } from '../middleware/rateLimit.js'
 
 const router = Router()
 
+// 教师密码长度约束，需与注册校验（至少 6 位）保持一致
+const PASSWORD_MIN_LEN = 6
+const PASSWORD_MAX_LEN = 64
+
 // 注册
 router.post('/register', registerRateLimit, async (req, res) => {
   const { username, password } = req.body
@@ -76,6 +80,39 @@ router.post('/login', loginRateLimit, async (req, res) => {
     token,
     user: { id: user.id, username: user.username, isGuest: !!user.is_guest }
   })
+})
+
+// 修改密码（教师账号）
+router.post('/change-password', authMiddleware, async (req, res) => {
+  const { oldPassword, newPassword } = req.body
+
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: '请输入原密码和新密码' })
+  }
+
+  const newPasswordText = String(newPassword)
+  if (newPasswordText.length < PASSWORD_MIN_LEN || newPasswordText.length > PASSWORD_MAX_LEN) {
+    return res.status(400).json({ error: `新密码长度须为 ${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN} 位` })
+  }
+
+  const user = await db.prepare('SELECT id, password_hash, is_guest FROM users WHERE id = ?').get(req.userId)
+  if (!user) {
+    return res.status(404).json({ error: '用户不存在' })
+  }
+
+  if (user.is_guest) {
+    return res.status(403).json({ error: '游客账号不支持修改密码' })
+  }
+
+  // 原密码错误用 400，避免前端 401 拦截器把已登录教师踢回游客模式
+  if (!verifyPassword(oldPassword, user.password_hash)) {
+    return res.status(400).json({ error: '原密码错误' })
+  }
+
+  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .run(hashPassword(newPasswordText), user.id)
+
+  res.json({ success: true })
 })
 
 // 获取当前用户信息（含班级与使用统计）

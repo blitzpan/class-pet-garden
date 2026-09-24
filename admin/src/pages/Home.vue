@@ -8,6 +8,7 @@ import GrowthAreaChart from '@/components/GrowthAreaChart.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ClassInviteModal from '@/components/ClassInviteModal.vue'
 import BgmTrackPicker from '@/components/BgmTrackPicker.vue'
+import ChangePasswordModal from '@/components/ChangePasswordModal.vue'
 import RankListRow from '@/components/ranking/RankListRow.vue'
 import { useToast } from '@/composables/useToast'
 import { useAuth } from '@/composables/useAuth'
@@ -57,6 +58,9 @@ const router = useRouter()
 const showTeacherProfile = ref(false)
 const teacherProfileLoading = ref(false)
 const teacherProfile = ref<TeacherProfile | null>(null)
+
+// 修改密码弹窗
+const showChangePassword = ref(false)
 
 interface Rule {
   id: string
@@ -221,6 +225,11 @@ async function switchClassFromProfile(summary: { id: string; name: string }) {
 
   await selectClass(cls)
   closeTeacherProfile()
+}
+
+function handlePasswordChanged() {
+  showChangePassword.value = false
+  toast.success('密码修改成功，下次登录请使用新密码')
 }
 
 async function handleTeacherLogout() {
@@ -1985,6 +1994,7 @@ onUnmounted(() => {
                 />
                 <span>默认播放背景音乐</span>
               </label>
+              <button type="button" class="rounded-xl border border-orange-200 bg-[#fff7ed] px-4 py-2 text-sm font-semibold text-[#c2410c]" @click="showChangePassword = true">修改密码</button>
               <button type="button" class="px-4 py-2 text-sm" @click="closeTeacherProfile">关闭</button>
               <button type="button" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600" @click="handleTeacherLogout">退出登录</button>
             </div>
@@ -1992,6 +2002,12 @@ onUnmounted(() => {
         </div>
       </div>
     </Transition>
+
+    <ChangePasswordModal
+      v-if="showChangePassword"
+      @close="showChangePassword = false"
+      @success="handlePasswordChanged"
+    />
 
     <ConfirmDialog :show="confirmDialog.show" :title="confirmDialog.title" :message="confirmDialog.message" :confirm-text="confirmDialog.confirmText" :cancel-text="confirmDialog.cancelText" :type="confirmDialog.type" @confirm="confirmDialog.onConfirm" @cancel="confirmDialog.show = false" />
   </div>
