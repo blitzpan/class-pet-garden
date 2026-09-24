@@ -118,9 +118,10 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, 
   return out + '…'
 }
 
-function loadImage(src: string, timeout = 8000): Promise<HTMLImageElement | null> {
+function loadTag(src: string, cors: boolean, timeout: number): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image()
+    if (cors) img.crossOrigin = 'anonymous'
     const timer = setTimeout(() => resolve(null), timeout)
     img.onload = () => {
       clearTimeout(timer)
@@ -132,6 +133,32 @@ function loadImage(src: string, timeout = 8000): Promise<HTMLImageElement | null
     }
     img.src = src
   })
+}
+
+/**
+ * 宠物图取法：先按 CORS 取；取不到再 fetch 成同源 blob: URL 加载。
+ * 部分手机浏览器（小米 / 微信）会把 <img> 的请求走自家代理、按跨源资源处理，
+ * 画进 canvas 会污染画布，导出时直接抛 SecurityError；blob: URL 铁定同源，绕开这个坑。
+ * 两条路都失败才退回爪印。
+ */
+async function loadImage(src: string, timeout = 8000): Promise<HTMLImageElement | null> {
+  const direct = await loadTag(src, true, timeout)
+  if (direct) return direct
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeout)
+  try {
+    const res = await fetch(src, { signal: ctrl.signal })
+    if (!res.ok) return null
+    const blobUrl = URL.createObjectURL(await res.blob())
+    const img = await loadTag(blobUrl, false, timeout)
+    URL.revokeObjectURL(blobUrl)
+    return img
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function ensureFonts() {
@@ -371,7 +398,7 @@ function drawFooter(ctx: CanvasRenderingContext2D, d: ShareCardData) {
   drawTracked(ctx, d.siteText, W / 2, 1140, 1)
 }
 
-export async function renderShareCard(data: ShareCardData): Promise<Blob> {
+async function paint(data: ShareCardData): Promise<Blob> {
   await ensureFonts()
 
   const canvas = document.createElement('canvas')
@@ -399,6 +426,18 @@ export async function renderShareCard(data: ShareCardData): Promise<Blob> {
       0.92,
     )
   })
+}
+
+/**
+ * 画卡。宠物图可能来自被代理/被重定向的跨域地址，画上去会污染画布导致导出抛 SecurityError，
+ * 所以导出失败时去掉宠物图重画一次：宁可头像退化成爪印，也要保证卡片能生成出来。
+ */
+export async function renderShareCard(data: ShareCardData): Promise<Blob> {
+  try {
+    return await paint(data)
+  } catch {
+    return await paint({ ...data, petImageUrl: '' })
+  }
 }
 
 export const SHARE_CARD_SIZE = { width: W, height: H }

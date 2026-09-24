@@ -34,12 +34,8 @@ function showToast(msg: string) {
 
 const isWechat = /micromessenger/i.test(navigator.userAgent)
 
-// ---- 移动端诊断（临时）：分享链接加 ?diag=1，?diag=0 关闭 ----
-const DIAG_KEY = 'pg_diag'
-const diagParam = new URLSearchParams(window.location.search).get('diag')
-if (diagParam === '1') localStorage.setItem(DIAG_KEY, '1')
-if (diagParam === '0') localStorage.removeItem(DIAG_KEY)
-const diagOn = diagParam === '1' || localStorage.getItem(DIAG_KEY) === '1'
+// ---- 移动端诊断（临时）：只有链接带 ?diag=1 才出现，不落 localStorage、不随跳转传播 ----
+const diagOn = new URLSearchParams(window.location.search).get('diag') === '1'
 const diagText = ref('')
 let drawError = ''
 
@@ -80,9 +76,18 @@ async function copyDiag() {
 
 const displayLevel = computed(() => (student.value ? calculateLevel(student.value.pet_exp) : 1))
 const progress = computed(() => getLevelProgress(student.value?.pet_exp || 0))
-const petImageUrl = computed(() =>
-  student.value?.pet_type ? getPetLevelImage(student.value.pet_type, displayLevel.value) : '',
-)
+// 早期部署曾把 /pets 反代到教师端域名（301 跳转），老客户端缓存了那条跨域响应：
+// 画进 canvas 会污染画布导致导出失败。配置早已改成直读同源目录，但客户端缓存还在，
+// 所以给图片 URL 固定加一个版本串，让老缓存失效、回源拿到同源 200。
+// 以后再遇到同类缓存问题（或宠物图资源换了），把这个数字 +1。
+const PET_IMG_V = 2
+
+const petImageUrl = computed(() => {
+  const raw = student.value?.pet_type
+    ? getPetLevelImage(student.value.pet_type, displayLevel.value)
+    : ''
+  return raw ? `${raw}?v=${PET_IMG_V}` : ''
+})
 const petName = computed(() => {
   if (!student.value?.pet_type) return '等待一位小伙伴'
   const name = getPetType(student.value.pet_type)?.name || '宠物'
@@ -195,9 +200,16 @@ async function onSave() {
   if (isWechat) showToast('若未自动保存，请长按图片保存')
 }
 
+/** 分享出去的链接不带 diag，避免诊断面板跟着传播 */
+function shareUrl() {
+  const u = new URL(window.location.href)
+  u.searchParams.delete('diag')
+  return u.toString()
+}
+
 async function onCopyLink() {
   try {
-    await navigator.clipboard.writeText(window.location.href)
+    await navigator.clipboard.writeText(shareUrl())
     showToast('分享链接已复制')
   } catch {
     showToast('复制失败，请手动复制地址栏链接')
@@ -213,18 +225,22 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-h-screen bg-[linear-gradient(180deg,#FDF8F3_0%,#F5E9DE_100%)] font-sans text-[#3A2F28]">
-    <div class="mx-auto max-w-[460px] px-5 pb-16 pt-6">
-      <!-- 顶栏 -->
-      <router-link
-        to="/"
-        class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-[#8A796B] shadow-[0_2px_10px_rgba(120,80,40,0.08)] backdrop-blur transition hover:bg-white hover:text-[#6B5849]"
-        aria-label="返回首页"
-      >
-        <span class="material-symbols-rounded text-[20px]">arrow_back</span>
-      </router-link>
+    <!-- 悬浮返回：固定在顶部并跟随内容列，不再占用页面顶部空间 -->
+    <div class="pointer-events-none fixed inset-x-0 top-0 z-50">
+      <div class="mx-auto max-w-[460px] px-4" style="padding-top: calc(env(safe-area-inset-top, 0px) + 12px)">
+        <router-link
+          to="/"
+          class="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/85 text-[#8A796B] shadow-[0_2px_12px_rgba(120,80,40,0.16)] backdrop-blur transition hover:bg-white hover:text-[#6B5849]"
+          aria-label="返回首页"
+        >
+          <span class="material-symbols-rounded text-[20px]">arrow_back</span>
+        </router-link>
+      </div>
+    </div>
 
+    <div class="mx-auto max-w-[460px] px-5 pb-10 pt-3">
       <!-- 加载 -->
-      <div v-if="loading" class="mt-8 flex flex-col items-center">
+      <div v-if="loading" class="mt-1 flex flex-col items-center">
         <div class="w-full animate-pulse rounded-[24px] bg-[#F3E7DC]" style="aspect-ratio: 750 / 1160" />
         <p class="mt-6 text-[13px] tracking-[0.18em] text-[#BCAEA1]">正在生成成长卡</p>
       </div>
@@ -232,7 +248,7 @@ onBeforeUnmount(() => {
       <!-- 不存在 -->
       <div
         v-else-if="notFound || !student"
-        class="mt-10 rounded-[28px] bg-white/80 px-8 py-20 text-center shadow-[0_10px_40px_rgba(120,80,40,0.06)] backdrop-blur"
+        class="mt-2 rounded-[28px] bg-white/80 px-8 py-20 text-center shadow-[0_10px_40px_rgba(120,80,40,0.06)] backdrop-blur"
       >
         <span class="material-symbols-rounded text-[48px] text-[#E4D2C1]">pets</span>
         <p class="mt-5 text-[17px] font-semibold text-[#3A2F28]">还没有找到这份成长记录</p>
@@ -246,7 +262,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- 主体：只有图片 + 两个按钮 -->
-      <div v-else class="mt-6 flex flex-col items-center">
+      <div v-else class="mt-1 flex flex-col items-center">
         <img
           v-if="cardUrl"
           :src="cardUrl"
