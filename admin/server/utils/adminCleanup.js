@@ -4,6 +4,8 @@ export async function deleteClassData(db, classId) {
   await db.prepare('DELETE FROM task_completions WHERE task_id IN (SELECT id FROM class_tasks WHERE class_id = ?)').run(classId)
   await db.prepare('DELETE FROM class_tasks WHERE class_id = ?').run(classId)
   await db.prepare('DELETE FROM evaluation_records WHERE class_id = ?').run(classId)
+  // 自动评价日志随班级一起清理，避免残留孤儿记录
+  await db.prepare('DELETE FROM auto_eval_log WHERE class_id = ?').run(classId)
   await db.prepare('DELETE FROM class_vip_subscriptions WHERE class_id = ?').run(classId)
   await db.prepare('DELETE FROM badges WHERE student_id IN (SELECT id FROM students WHERE class_id = ?)').run(classId)
   await db.prepare('DELETE FROM students WHERE class_id = ?').run(classId)

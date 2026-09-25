@@ -9,6 +9,7 @@ const TEST_DB_PATH = process.env.SQLITE_TEST_PATH || path.resolve(__dirname, '..
 const TABLES = [
   'task_completions',
   'class_tasks',
+  'auto_eval_log',
   'evaluation_records',
   'class_vip_subscriptions',
   'badges',

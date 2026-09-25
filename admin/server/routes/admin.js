@@ -5,6 +5,7 @@ import { ADMIN_USERNAME, adminMiddleware } from '../middleware/admin.js'
 import { hashPassword } from '../utils/password.js'
 import { deleteClassData, deleteUserData, DEMO_CLASS_ID } from '../utils/adminCleanup.js'
 import { normalizeVipRow } from './vip.js'
+import { runAutoEvaluationForDate } from '../services/autoEvalService.js'
 
 const router = Router()
 
@@ -158,6 +159,18 @@ router.put('/vip/authorize', async (req, res) => {
     vip,
     message: 'VIP 授权已保存',
   })
+})
+
+// 手动触发一次自动评价（后门）：用于验证配置与应急补跑。
+// body 可传 { date: 'YYYY-MM-DD' } 指定日期，不传则按配置时区取今天；同一天重复调用不会重复加分。
+router.post('/auto-eval/run', async (req, res) => {
+  const { date } = req.body || {}
+  try {
+    const summary = await runAutoEvaluationForDate(db, { evalDate: date })
+    res.json(summary)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
 })
 
 async function listAllMembers() {

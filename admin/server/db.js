@@ -221,6 +221,21 @@ export async function initDb() {
       CONSTRAINT fk_vip_class FOREIGN KEY (class_id) REFERENCES classes(id)
     )`,
 
+    // 自动评价（后门）每日执行日志：UNIQUE(student_id, eval_date) 保证同一天不会重复加分。
+    // 不加外键约束，避免影响既有的删除学生/班级流程（该表仅是审计与幂等用途）。
+    `CREATE TABLE IF NOT EXISTS auto_eval_log (
+      id VARCHAR(36) PRIMARY KEY,
+      class_id VARCHAR(36) NOT NULL,
+      student_id VARCHAR(36) NOT NULL,
+      eval_date VARCHAR(10) NOT NULL,
+      points_delta INT NOT NULL DEFAULT 0,
+      record_count INT NOT NULL DEFAULT 0,
+      skipped TINYINT NOT NULL DEFAULT 0,
+      reason VARCHAR(255),
+      created_at BIGINT,
+      UNIQUE (student_id, eval_date)
+    )`,
+
     `CREATE INDEX IF NOT EXISTS idx_classes_user_id ON classes(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id)`,
     `CREATE INDEX IF NOT EXISTS idx_rules_user_id ON evaluation_rules(user_id)`,
@@ -230,6 +245,7 @@ export async function initDb() {
     `CREATE INDEX IF NOT EXISTS idx_tasks_class_id ON class_tasks(class_id)`,
     `CREATE INDEX IF NOT EXISTS idx_completions_task_id ON task_completions(task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_completions_student_id ON task_completions(student_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_auto_eval_date ON auto_eval_log(eval_date)`,
   ]
 
   for (const statement of statements) {

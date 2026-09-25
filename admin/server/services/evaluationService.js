@@ -32,8 +32,10 @@ export async function assertEvaluationCooldown(db, { studentId, reason, now = Da
 
 /**
  * 写入评价记录并更新学生积分与宠物成长
+ * @param {number} [timestamp] 事件发生时间（毫秒）。默认取当前时间；
+ *   自动评价（后门）会传入回填到当天上课时段的过去时间，使记录看起来是当天自然产生的。
  */
-export async function applyEvaluation(db, { classId, studentId, points, reason, category }) {
+export async function applyEvaluation(db, { classId, studentId, points, reason, category, timestamp }) {
   const student = await db.prepare('SELECT * FROM students WHERE id = ?').get(studentId)
   if (!student) {
     throw new Error('学生不存在')
@@ -44,18 +46,20 @@ export async function applyEvaluation(db, { classId, studentId, points, reason, 
 
   const id = uuidv4()
   const now = Date.now()
+  // 记录落库时间：允许回填（历史/当天补录），冷却判断仍以真实时间为准
+  const recordTimestamp = Number.isFinite(timestamp) ? timestamp : now
 
   await assertEvaluationCooldown(db, { studentId, reason, now })
 
   await db.prepare(
     'INSERT INTO evaluation_records (id, class_id, student_id, points, reason, category, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, classId, studentId, points, reason, category, now)
+  ).run(id, classId, studentId, points, reason, category, recordTimestamp)
 
   await db.prepare('UPDATE students SET total_points = total_points + ? WHERE id = ?').run(points, studentId)
 
   const result = {
     id,
-    timestamp: now,
+    timestamp: recordTimestamp,
     petLevel: student?.pet_level,
     petExp: student?.pet_exp,
     levelUp: false,
@@ -71,7 +75,7 @@ export async function applyEvaluation(db, { classId, studentId, points, reason, 
     if (newLevel === 8 && student.pet_level < 8) {
       const badgeId = uuidv4()
       await db.prepare('INSERT INTO badges (id, student_id, pet_type, earned_at) VALUES (?, ?, ?, ?)')
-        .run(badgeId, studentId, student.pet_type, now)
+        .run(badgeId, studentId, student.pet_type, recordTimestamp)
       graduated = true
     }
 

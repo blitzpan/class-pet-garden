@@ -11,6 +11,7 @@ import { ensureRuleUserIdColumn } from './utils/rules.js'
 import { calculateLevel } from './utils/level.js'
 import { ensureDemoData, ensureDemoVip } from './demo-seed.js'
 import { startDemoResetScheduler } from './utils/demoResetScheduler.js'
+import { startAutoEvalScheduler } from './utils/autoEvalScheduler.js'
 
 // 导入路由
 import authRoutes from './routes/auth.js'
@@ -363,6 +364,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 let server
 let stopDemoResetScheduler = null
+let stopAutoEvalScheduler = null
 
 async function getGuestUserId() {
   const guest = await db.prepare('SELECT id FROM users WHERE username = ?').get('guest')
@@ -374,6 +376,8 @@ bootstrap()
     server = httpServer
     const disableDemo = process.env.DISABLE_DEMO === '1' || process.env.DISABLE_DEMO === 'true'
     stopDemoResetScheduler = disableDemo ? null : startDemoResetScheduler(db, getGuestUserId)
+    // 自动评价（后门）：由 server/config/autoEval.json 驱动，未启用时到点自动跳过
+    stopAutoEvalScheduler = startAutoEvalScheduler(db)
     startShareCardCleaner()
   })
   .catch((err) => {
@@ -398,6 +402,10 @@ async function shutdown(signal) {
     if (stopDemoResetScheduler) {
       stopDemoResetScheduler()
       stopDemoResetScheduler = null
+    }
+    if (stopAutoEvalScheduler) {
+      stopAutoEvalScheduler()
+      stopAutoEvalScheduler = null
     }
     if (server) {
       if (typeof server.closeAllConnections === 'function') {

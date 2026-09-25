@@ -46,6 +46,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
   try {
     // Clear existing data for current user
+    // 自动评价日志一并失效：恢复到备份时间点的状态后，当天可以重新执行
+    await db.prepare('DELETE FROM auto_eval_log WHERE class_id IN (SELECT id FROM classes WHERE user_id = ?)').run(req.userId)
     await db.prepare('DELETE FROM evaluation_records WHERE class_id IN (SELECT id FROM classes WHERE user_id = ?)').run(req.userId)
     await db.prepare('DELETE FROM badges WHERE student_id IN (SELECT s.id FROM students s JOIN classes c ON s.class_id = c.id WHERE c.user_id = ?)').run(req.userId)
     await db.prepare('DELETE FROM students WHERE class_id IN (SELECT id FROM classes WHERE user_id = ?)').run(req.userId)

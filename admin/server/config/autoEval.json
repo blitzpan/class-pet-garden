@@ -1,0 +1,47 @@
+{
+  "_说明": {
+    "_readme": "自动评价（后门）配置。每天 runAt 时刻给指定班级的指定学生补录当天若干条加减分记录；学生需先在教师端手动创建好，这里只引用。改完本文件无需重启，下一次执行自动生效。",
+    "enabled": "总开关，false 时完全不启动定时任务（默认 false，确认无误后再打开）",
+    "timezone": "时区，影响『每天几点跑』和『哪天算周末』的判断，默认 Asia/Shanghai",
+    "runAt": "每天执行时刻，24 小时制 HH:MM，默认 20:30（晚间一次性补录当天记录）",
+    "defaults.dailyMin": "每日净增积分下限，可为负数（负数=允许当天净扣分）",
+    "defaults.dailyMax": "每日净增积分上限，实际每天在该区间内随机波动",
+    "defaults.gapToTop": "与真实第一名的安全差距：后门学生总分天花板 = 真实第一名总分 - gapToTop，保证永远拿不到第一",
+    "defaults.maxDailyDrop": "触顶后单日最大回落分值，避免『一天暴跌』露馅",
+    "defaults.weekendFactor": "周末缩放系数（0~1），区间上下限与记录条数都会乘它，实现周末减量",
+    "defaults.recordsPerDay": "平日每天生成几条记录，[最少, 最多]。最少只能填 1：只要当天有分值变化就必须留下记录，不允许出现『分数变了却查不到评价记录』的幽灵分数；想让某些天完全不动，请让 dailyMin/dailyMax 跨过 0（净增抽到 0 时当天跳过）",
+    "defaults.weekendRecordsPerDay": "周末每天生成几条记录，[最少, 最多]，同样最少为 1",
+    "defaults.negativeChance": "当天掺入 1 条扣分记录的概率（0~1），让曲线更像真人。仅在当天条数 ≥3 时才可能掺入，故实际出现扣分日的概率低于该值",
+    "classes": "班级数组。每项用 classId 或 className 二选一定位班级；班级级别也可以直接写上面任意参数覆盖 defaults",
+    "classes[].students": "学生数组。每项用 id 或 name 二选一定位学生（用 name 时需与教师端姓名完全一致）；学生级别也可以写参数再覆盖班级级",
+    "_示例": "{\"classId\":\"6f1c...\",\"students\":[{\"name\":\"小明\"},{\"id\":\"a1b2...\",\"dailyMax\":6}]}",
+    "_注意": "同一学生会同时被排除在『真实第一名』的计算之外，几个后门学生之间不会互相抬高天花板；同一天重复执行（重启/手动触发）不会重复加分",
+    "_部署": "配置文件查找顺序：AUTO_EVAL_CONFIG 环境变量 > 代码上一级 config 目录（容器挂载点，如 /app/config）> 代码内 config 目录（随发布包自带的这份）。挂载目录优先，避免镜像自带的 enabled=false 文件遮蔽运维配置。改完无需重新构建前端，重启后端即可；无需任何手工建表或数据迁移（auto_eval_log 表由服务启动时自动创建）"
+  },
+
+  "enabled": true,
+  "timezone": "Asia/Shanghai",
+  "runAt": "20:30",
+
+  "defaults": {
+    "dailyMin": -4,
+    "dailyMax": 10,
+    "gapToTop": 2,
+    "maxDailyDrop": 4,
+    "weekendFactor": 0.5,
+    "recordsPerDay": [1, 4],
+    "weekendRecordsPerDay": [1, 2],
+    "negativeChance": 0.2
+  },
+
+  "classes": [
+    {
+      "_班级说明": "后门班级：学生为手动创建，仅用于营造竞争氛围。学生用 id 定位（最稳，改名也不会失效），name 仅作备注便于阅读",
+      "classId": "ffbc31d4-4713-46ac-b6c8-37566911f99c",
+      "students": [
+        { "id": "610d8fe6-1202-411f-a379-d5bdd8aca9a2", "name": "张奕辰" },
+        { "id": "fdbd75d3-2ca2-468f-8c80-5ca4442bf801", "name": "李语桐" }
+      ]
+    }
+  ]
+}
